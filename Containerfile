@@ -15,8 +15,8 @@ RUN curl -fsSL https://opencode.ai/install | bash && \
 RUN useradd -m -s /bin/bash appuser
 
 # Copy project-local config and skills
-COPY --chown=appuser:appuser .opencode/ /home/appuser/.opencode/
-COPY --chown=appuser:appuser opencode.json /home/appuser/opencode.json
+COPY --chown=appuser:appuser container/.opencode/ /home/appuser/.opencode/
+COPY --chown=appuser:appuser container/opencode.json /home/appuser/opencode.json
 
 USER appuser
 WORKDIR /app
