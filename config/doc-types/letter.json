@@ -1,0 +1,26 @@
+{
+  "id": "letter",
+  "name": "Письмо",
+  "hint": "Официальное письмо организации: обращение, повод, суть, просьба",
+  "docTitle": null,
+  "layout": ["orgHeader", "dateNumber", "addressee", "title", "salutation", "body", "signature", "executor"],
+  "structureHint": "Обращение → повод → суть → просьба или вывод. salutation формируется только при наличии имени и отчества адресата.",
+  "fields": [
+    { "key": "addresseeOrg", "label": "Организация-получатель", "kind": "extract", "required": true,
+      "question": "Название организации-получателя?", "example": "ООО «СтройМонтаж»" },
+    { "key": "addresseePerson", "label": "ФИО получателя", "kind": "extract", "required": true,
+      "question": "ФИО и должность получателя?", "example": "Директору Петрову И. С." },
+    { "key": "addresseeAddress", "label": "Адрес получателя", "kind": "extract", "required": false,
+      "question": "Почтовый адрес?", "example": "123456, г. Москва, ул. Примерная, д. 1" },
+    { "key": "salutation", "label": "Обращение", "kind": "derived", "required": false },
+    { "key": "title", "label": "Заголовок", "kind": "derived", "required": true },
+    { "key": "signerPosition", "label": "Должность подписывающего", "kind": "extract", "required": true,
+      "question": "Должность подписывающего?", "example": "Генеральный директор" },
+    { "key": "signerName", "label": "ФИО подписывающего", "kind": "extract", "required": true,
+      "question": "ФИО подписывающего?", "example": "Иванов И. И." },
+    { "key": "executor", "label": "Исполнитель", "kind": "extract", "required": false,
+      "question": "Исполнитель (кто подготовил)?", "example": "Сидоров П. П., тел. +7 (000) 000-00-00" },
+    { "key": "date", "label": "Дата", "kind": "auto", "required": true },
+    { "key": "number", "label": "Номер", "kind": "registry", "required": false }
+  ]
+}

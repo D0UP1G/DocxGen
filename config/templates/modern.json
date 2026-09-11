@@ -1,0 +1,23 @@
+{
+  "id": "modern",
+  "name": "Современный",
+  "description": "Arial 12 пт, интервал 1.15, выравнивание по левому краю, адресат слева, организация в колонтитуле, «Страница N из M» внизу",
+  "preview": "previews/modern.png",
+  "organization": { "name": "ООО «Пример»", "address": "г. Москва, ул. Примерная, д. 1", "phone": "+7 (000) 000-00-00" },
+  "page": { "marginsMm": { "top": 25, "right": 15, "bottom": 25, "left": 25 } },
+  "font": { "family": "Arial", "sizePt": 12 },
+  "paragraph": { "lineSpacing": 1.15, "firstLineIndentMm": 0, "align": "left", "spaceAfterPt": 6 },
+  "header": { "pageNumber": "none", "firstPage": false, "text": "ООО «Пример»" },
+  "footer": { "text": null, "pageNumber": "nOfM" },
+  "blocks": {
+    "orgHeader":  { "show": false, "align": "center", "bold": true },
+    "addressee":  { "position": "left", "widthPercent": 100 },
+    "docTitle":   { "align": "center", "bold": true },
+    "dateNumber": { "layout": "stack" },
+    "title":      { "align": "left", "bold": true, "italic": false },
+    "signature":  { "layout": "stack" }
+  },
+  "placeholder": { "format": "[{label}]", "highlight": "yellow" },
+  "autoFill": { "date": true },
+  "dateFormat": "DD.MM.YYYY"
+}

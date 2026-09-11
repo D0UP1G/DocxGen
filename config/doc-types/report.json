@@ -1,0 +1,20 @@
+{
+  "id": "report",
+  "name": "Докладная записка",
+  "hint": "Доведение информации до руководства: факты, выводы, предложения",
+  "docTitle": "ДОКЛАДНАЯ ЗАПИСКА",
+  "layout": ["orgHeader", "addressee", "docTitle", "dateNumber", "title", "body", "signature"],
+  "structureHint": "Факты → причины → выводы и предложения. Каждая мысль — отдельный абзац.",
+  "fields": [
+    { "key": "addressee", "label": "Адресат", "kind": "extract", "required": true,
+      "question": "Кому адресована записка? Укажите должность и ФИО.",
+      "example": "Генеральному директору Иванову И. И." },
+    { "key": "authorPosition", "label": "Должность автора", "kind": "extract", "required": true,
+      "question": "Ваша должность и подразделение?", "example": "Начальник отдела логистики" },
+    { "key": "authorName", "label": "ФИО автора", "kind": "extract", "required": true,
+      "question": "Ваши фамилия и инициалы?", "example": "Петров П. П." },
+    { "key": "title", "label": "Заголовок", "kind": "derived", "required": true },
+    { "key": "date", "label": "Дата", "kind": "auto", "required": true },
+    { "key": "number", "label": "Номер", "kind": "registry", "required": false }
+  ]
+}

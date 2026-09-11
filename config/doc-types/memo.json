@@ -1,0 +1,20 @@
+{
+  "id": "memo",
+  "name": "Служебная записка",
+  "hint": "Обращение между подразделениями: просьба, предложение, информация",
+  "docTitle": "СЛУЖЕБНАЯ ЗАПИСКА",
+  "layout": ["orgHeader", "addressee", "docTitle", "dateNumber", "title", "body", "signature"],
+  "structureHint": "Изложи суть вопроса, затем обоснование, затем просьбу или предложение. Каждая мысль — отдельный абзац.",
+  "fields": [
+    { "key": "addressee", "label": "Адресат", "kind": "extract", "required": true,
+      "question": "Кому адресована записка? Укажите должность и ФИО.",
+      "example": "Начальнику отдела кадров Петровой А. С." },
+    { "key": "authorPosition", "label": "Должность автора", "kind": "extract", "required": true,
+      "question": "Ваша должность и подразделение?", "example": "Ведущий специалист отдела закупок" },
+    { "key": "authorName", "label": "ФИО автора", "kind": "extract", "required": true,
+      "question": "Ваши фамилия и инициалы?", "example": "Сидоров П. П." },
+    { "key": "title", "label": "Заголовок", "kind": "derived", "required": true },
+    { "key": "date", "label": "Дата", "kind": "auto", "required": true },
+    { "key": "number", "label": "Номер", "kind": "registry", "required": false }
+  ]
+}
