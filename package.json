@@ -9,9 +9,10 @@
     "start": "pnpm --filter @docxgen/backend start",
     "test": "pnpm --filter @docxgen/backend test",
     "eval": "pnpm --filter @docxgen/backend eval",
-    "demo": "pnpm --filter @docxgen/backend demo",
     "build": "pnpm -r build",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "opencode:check": "pnpm --filter @docxgen/backend opencode:check",
+    "max:subscribe": "pnpm --filter @docxgen/backend max:subscribe"
   },
   "devDependencies": {
     "concurrently": "^10.0.5"

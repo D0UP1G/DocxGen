@@ -13,6 +13,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  * @returns {import('better-sqlite3').Database}
  */
 export function openDb(dbPath, { log } = {}) {
+  // The data directory may not exist yet on a fresh checkout — better-sqlite3 does not create it.
+  if (dbPath !== ':memory:') fs.mkdirSync(path.dirname(path.resolve(dbPath)), { recursive: true });
   const db = new Database(dbPath);
 
   // WAL mode for concurrent reads; foreign keys enforced globally.

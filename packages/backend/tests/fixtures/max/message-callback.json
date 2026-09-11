@@ -1,0 +1,1 @@
+{"update_type":"message_callback","callback":{"callback_id":"callback-1","payload":"{\"a\":\"type\",\"v\":\"memo\",\"r\":7}","user":{"user_id":2001},"message":{"body":{"mid":"max-message-2","text":"Выберите тип"},"recipient":{"chat_id":1001,"chat_type":"dialog"}}}}

@@ -54,7 +54,7 @@ export function startWorker({ db, queue, handlers, concurrency = 2, pollMs = 500
         log.info({ jobId: job.id }, 'job done');
       }
     } catch (err) {
-      if (err instanceof AiUnavailableError || err instanceof AiInvalidResponseError) {
+      if ((err instanceof AiUnavailableError || err instanceof AiInvalidResponseError) && err.retryable !== false) {
         const { failed, requeued } = queue.fail(job.id, err, job);
         if (failed) {
           log.error({ jobId: job.id, error: err.message }, 'job failed permanently');
@@ -62,8 +62,8 @@ export function startWorker({ db, queue, handlers, concurrency = 2, pollMs = 500
           log.info({ jobId: job.id }, 'job requeued');
         }
       } else {
-        // Non-retryable error — fail permanently
-        queue.fail(job.id, err, job);
+        // Non-retryable error — fail permanently: exhaust the attempts so fail() does not requeue
+        queue.fail(job.id, err, { ...job, attempts: job.max_attempts });
         log.error({ jobId: job.id, error: err.message }, 'job failed (non-retryable)');
       }
     }

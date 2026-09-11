@@ -25,7 +25,8 @@ export async function processDraft({ draft, docType, userFields, provider, log, 
 
   // Step 0: Fault injection check
   if (faultManager && ownerKey && faultManager.shouldFault(ownerKey)) {
-    throw new AiUnavailableError('AI fault injected');
+    // retryable: false — иначе очередь повторит задание и пользователь не увидит ошибку (сценарий 6)
+    throw new AiUnavailableError('AI fault injected', { retryable: false });
   }
 
   // Step 1: Build messages and call AI

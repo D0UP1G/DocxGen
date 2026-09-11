@@ -1,0 +1,1 @@
+{"type":"message_new","event_id":"vk-event-1","group_id":123,"object":{"message":{"id":1,"peer_id":2001,"from_id":2001,"conversation_message_id":1,"text":"Довожу до сведения, что отдел подготовил материалы."},"client_info":{"inline_keyboard":true}}}

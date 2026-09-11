@@ -58,7 +58,8 @@ function createMockFileStorage() {
   return {
     save: (buffer, filename) => {
       const id = `file-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const filePath = `/tmp/${id}.docx`;
+      // os.tmpdir(), а не '/tmp': на Windows такого каталога нет и запись падает
+      const filePath = path.join(os.tmpdir(), `${id}.docx`);
       files.set(id, { buffer, filename, path: filePath });
       fs.writeFileSync(filePath, buffer);
       return { id, path: filePath, filename };

@@ -1,45 +1,53 @@
+/**
+ * Process document handler — runs AI processing for a queued document.
+ *
+ * Flow: load document → check staleness → processDraft (AI + validation) →
+ * save version → mark processed → emit event for the notifier.
+ *
+ * Retries: the worker requeues retryable AI errors. The 'document.failed'
+ * event is emitted only when no attempts are left — otherwise the user would
+ * see an error message and then, seconds later, a successful result.
+ *
+ * Dependencies are injected (Dependency Inversion):
+ *   documentService — document lifecycle
+ *   processDraft — AI pipeline (injected for tests)
+ *   docTypes — document type catalog (config passed to the AI prompt)
+ *   provider — AI provider (openai-compat | opencode | mock)
+ *   faultManager — simulated AI outage for scenario 6 (/ai_fail)
+ *   log — pino-compatible logger
+ */
+
 import { events } from '../../core/events.js';
 
-/**
- * Create the processDocument handler.
- *
- * DESIGN DECISIONS:
- * - Loads document from documentService, checks if draft/version changed since job was queued.
- * - If stale (document modified after job enqueue), returns 'stale' — worker marks job stale.
- * - On success: saves version, marks document processed, emits event.
- * - On failure: emits document.failed event, re-throws for worker retry logic.
- * - Handler returns 'stale' or void; worker decides what to do with the return value.
- *
- * @param {{ documentService: object, processDraft: function, log: object }} deps
- * @returns {function} handler(job) → 'stale' | void
- */
-export function createProcessDocumentHandler({ documentService, processDraft, log }) {
+export function createProcessDocumentHandler({ documentService, processDraft, docTypes, provider, faultManager, log }) {
   return async function processDocument(job) {
     const payload = job.payload ? JSON.parse(job.payload) : {};
     const { documentId, draftVersion, docType } = payload;
 
-    // Load document
     const doc = documentService.getInternal(documentId);
     if (!doc) {
       log.warn({ documentId }, 'document not found, skipping');
       return 'stale';
     }
 
-    // Check if draft or type changed since job was queued
+    // The draft or the type changed after the job was queued — the result would be outdated.
     if (doc.draft_version !== draftVersion || doc.doc_type !== docType) {
       return 'stale';
     }
 
+    const attemptsUsed = (job.attempts ?? 0) + 1 >= (job.max_attempts ?? 1);
+
     try {
-      // Process through AI
       const result = await processDraft({
         draft: doc.source_text,
-        docType: doc.doc_type_config,
+        docType: docTypes ? docTypes.get(doc.doc_type) : doc.doc_type_config,
         userFields: JSON.parse(doc.user_fields || '{}'),
+        provider,
+        faultManager,
+        ownerKey: `${doc.owner_platform}:${doc.owner_id}`,
         log,
       });
 
-      // Save version
       documentService.saveVersion({
         documentId,
         draftVersion,
@@ -51,15 +59,18 @@ export function createProcessDocumentHandler({ documentService, processDraft, lo
         changes: result.changes,
         warnings: result.warnings,
       });
-
-      // Update document status
       documentService.markProcessed(documentId);
-
       events.emit('document.processed', { documentId });
     } catch (err) {
-      log.error({ documentId, error: err.message }, 'processDocument failed');
-      events.emit('document.failed', { documentId, reason: err.message });
-      throw err; // Let worker handle retry/fail
+      // The user is told about the failure only when nothing will be retried — otherwise they would
+      // see an error and a successful result a few seconds later.
+      const finalFailure = attemptsUsed || err.retryable === false;
+      log.error({ documentId, error: err.message, finalFailure }, 'processDocument failed');
+      if (finalFailure) {
+        documentService.markFailed?.(documentId, err.message);
+        events.emit('document.failed', { documentId, reason: err.message });
+      }
+      throw err; // Let the worker decide between retry and permanent failure
     }
   };
 }

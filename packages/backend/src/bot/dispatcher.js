@@ -23,6 +23,7 @@
  */
 
 import { createLockManager } from './lock.js';
+import { sendReplies } from './sendReplies.js';
 import * as texts from './texts.js';
 
 /**
@@ -64,15 +65,36 @@ export function createDispatcher({ db, flow, adapters, log }) {
       conversations.set(key, {
         platform,
         peerId,
+        userId: peerId,   // in MAX the chat id differs from the user id — updated from the event
+        profile: null,    // { firstName, lastName } — used to greet the user by name
         state: 'idle',
         stateVersion: 0,
         documentId: null,
+        lastFileId: null,
         pendingField: null,
         pendingQueue: [],
         ctx: {},
       });
     }
     return conversations.get(key);
+  }
+
+  /**
+   * Remember who is talking: documents are owned by the user, and the greeting uses their name.
+   * MAX sends the name inside every event; VK does not, so the adapter looks it up once.
+   * @param {object} conversation
+   * @param {object} event - InboundEvent
+   * @param {object} adapter - platform adapter
+   */
+  async function rememberUser(conversation, event, adapter) {
+    if (event.userId) conversation.userId = String(event.userId);
+    if (event.profile?.firstName) { conversation.profile = event.profile; return; }
+    if (conversation.profile !== null || typeof adapter.getProfile !== 'function') return;
+    // The result (even null) is cached: no lookup on every message.
+    conversation.profile = await adapter.getProfile(conversation.userId).catch((err) => {
+      log.warn({ error: err.message }, 'profile lookup failed');
+      return undefined;
+    }) ?? undefined;
   }
 
   /**
@@ -128,6 +150,7 @@ export function createDispatcher({ db, flow, adapters, log }) {
 
       try {
         const conversation = getConversation(event.platform, event.peerId);
+        await rememberUser(conversation, event, adapter);
 
         // Check state_version for button actions (reject stale presses)
         if (event.kind === 'action' && event.action?.r !== conversation.stateVersion) {
@@ -142,7 +165,7 @@ export function createDispatcher({ db, flow, adapters, log }) {
         indexByDocument(conversation);
 
         if (replies.length > 0) {
-          await adapter.send(event.peerId, replies, { event });
+          await sendReplies({ adapter, flow, conversation, replies, event });
         }
 
         markHandled.run(event.platform, event.eventId);
@@ -150,7 +173,7 @@ export function createDispatcher({ db, flow, adapters, log }) {
         log.error({ event, error: err.message }, 'dispatcher run failed');
         markFailed.run(event.platform, event.eventId);
         try {
-          await adapter.send(event.peerId, [{ text: 'Произошла ошибка. Попробуйте позже.' }], { event });
+          await adapter.send(event.peerId, [{ text: 'Произошла ошибка. Повторите действие — введённый текст сохранён.' }], { event });
         } catch {}
       } finally {
         release();

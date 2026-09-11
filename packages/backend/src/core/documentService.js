@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { mergeRequisites } from '../validation/requisites.js';
 import { DomainError } from './errors.js';
 
 /**
@@ -130,9 +131,13 @@ export function createDocumentService({ db, queue, fileStorage, docTypes, templa
         kind: version.kind,
         title: version.title,
         body: JSON.parse(version.body || '[]'),
+        // Requisites extracted by the AI and verified by grounding — the dialog and render need them,
+        // otherwise the bot asks the user for values the AI already found.
+        aiFields: JSON.parse(version.ai_fields || '{}'),
         changes: JSON.parse(version.changes || '[]'),
         warnings: JSON.parse(version.warnings || '[]'),
-        stale: version.draft_version !== doc.draft_version,
+        // A version is stale when the draft OR the document type changed after processing.
+        stale: version.draft_version !== doc.draft_version || version.doc_type !== doc.doc_type,
       } : null,
       pending: [],  // Will be computed by caller using mergeRequisites
       placeholders: [],
@@ -413,6 +418,24 @@ export function createDocumentService({ db, queue, fileStorage, docTypes, templa
      *
      * @param {string} documentId
      */
+    /**
+     * Mark a document as failed after the AI could not process it (all attempts used).
+     * The draft stays untouched, so the user can retry via retryProcessing().
+     *
+     * @param {string} documentId
+     * @param {string} reason - message shown in the document view
+     */
+    markFailed(documentId, reason) {
+      const doc = getDoc.get(documentId);
+      if (!doc) return;
+      updateDoc.run({
+        id: documentId, docType: doc.doc_type, templateId: doc.template_id,
+        sourceText: doc.source_text, draftVersion: doc.draft_version,
+        userFields: doc.user_fields, status: 'ai_failed',
+        currentVersionId: doc.current_version_id, lastError: String(reason).slice(0, 500), now: now(),
+      });
+    },
+
     markProcessed(documentId) {
       const doc = getDoc.get(documentId);
       if (!doc) return;
@@ -459,7 +482,16 @@ export function createDocumentService({ db, queue, fileStorage, docTypes, templa
       const docType = docTypes.get(doc.doc_type);
       const { template, fallback } = templates.get(doc.template_id);
 
-      const values = {}; // Would come from mergeRequisites — simplified here
+      // Requisites for the file: user answers > AI values > auto (date) > template.
+      // Everything left empty becomes a highlighted [Label] placeholder inside the DOCX.
+      const { values, placeholders } = mergeRequisites({
+        docType,
+        template,
+        aiFields: JSON.parse(version.ai_fields || '{}'),
+        title: version.title,
+        userFields: JSON.parse(doc.user_fields || '{}'),
+        today: new Date().toISOString().slice(0, 10),
+      });
       const model = {
         docType,
         template,
@@ -469,8 +501,9 @@ export function createDocumentService({ db, queue, fileStorage, docTypes, templa
       };
 
       const buffer = await renderDocx(model);
+      // Кеш файла: одна и та же версия + шаблон + значения реквизитов дают тот же файл.
       const fieldsHash = crypto.createHash('sha256')
-        .update(JSON.stringify(Object.entries(values).sort()))
+        .update(JSON.stringify(Object.entries(values).map(([key, item]) => [key, item?.value ?? null]).sort()))
         .digest('hex')
         .slice(0, 16);
 
@@ -489,11 +522,11 @@ export function createDocumentService({ db, queue, fileStorage, docTypes, templa
         id: fileId, documentId: id, versionId: version.id,
         templateId: doc.template_id, fieldsHash,
         path: saved.path, filename,
-        placeholders: '[]', // Would come from mergeRequisites
+        placeholders: JSON.stringify(placeholders),
         now: now(),
       });
 
-      return { file: getFile.get(fileId), fallback: fallback?.requestedId || null, placeholders: [] };
+      return { file: getFile.get(fileId), fallback: fallback?.requestedId || null, placeholders };
     },
 
     /**
