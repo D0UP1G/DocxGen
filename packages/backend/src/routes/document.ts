@@ -4,6 +4,7 @@ import * as path from 'path';
 import { generateTypstStream, patchTypstErrors } from '../services/ai.service';
 import { compileTypstContent, retryCompile } from '../services/typst.service';
 import { convertToDocx } from '../services/pandoc.service';
+import { validateRequisites, getFieldLabel } from '../services/validation.service';
 
 const MAX_RETRIES = 10;
 
@@ -45,9 +46,31 @@ router.post('/generate', async (req: Request, res: Response) => {
       documentType: aiResult.documentType,
     }));
 
+    // Validate extracted requisites
+    const validation = validateRequisites(aiResult.requisites, documentType);
+    if (!validation.isValid) {
+      sendEvent('validation', JSON.stringify({
+        isValid: false,
+        missing: validation.missingFields.map(f => ({
+          field: f,
+          label: getFieldLabel(f),
+        })),
+        message: `Отсутствуют: ${validation.missingFields.map(f => getFieldLabel(f)).join(', ')}`,
+      }));
+    }
+
     // Step 2: Generate Typst from structured data (will be implemented next)
     // For now, use the corrected text
     let typstContent = aiResult.correctedText;
+
+    // If validation failed, replace missing fields with placeholder
+    if (!validation.isValid) {
+      for (const field of validation.missingFields) {
+        const label = getFieldLabel(field);
+        // Replace known label patterns with placeholder — best-effort
+        typstContent = typstContent.replace(new RegExp(`${label}[:\\s]*[^\\n]*`), `${label}: [Заполнить]`);
+      }
+    }
 
     // Step 2: Compile with retry loop
     let attempt = 0;

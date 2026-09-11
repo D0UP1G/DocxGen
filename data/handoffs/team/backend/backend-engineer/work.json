@@ -3,29 +3,26 @@
     "timestamp": "2026-09-11T00:00:00Z",
     "agent_id": "team/backend/backend-engineer",
     "session_start": "2026-09-11T00:00:00Z",
-    "session_end": "2026-09-11T00:00:00Z",
-    "vector": "docxgen-prompts-extraction"
+    "session_end": "2026-09-11T00:01:00Z",
+    "vector": "docxgen-validation-wireup"
   },
   "data": {
     "shared": {
       "key_facts": [
-        "New file created: packages/backend/src/prompts/document-prompts.ts",
-        "Two exported functions: getMainPrompt, getFixPrompt",
-        "ai.service.ts now imports from ../prompts/document-prompts",
-        "Inline prompt strings fully removed from ai.service.ts",
-        "tsc --noEmit passes cleanly — zero type errors"
+        "validateRequisites and getFieldLabel imported from validation.service.ts",
+        "Validation runs after AI processing, before Typst compilation",
+        "Missing fields replaced with [Заполнить] placeholder in typstContent",
+        "Frontend receives 'validation' SSE event with missing field details"
       ],
       "call_chains": [
-        "ai.service.ts -> getMainPrompt() from document-prompts.ts",
-        "ai.service.ts -> getFixPrompt() from document-prompts.ts"
+        "document.ts -> validation.service.ts: validateRequisites, getFieldLabel"
       ],
       "blast_radius": [
-        "packages/backend/src/prompts/document-prompts.ts (new)",
-        "packages/backend/src/services/ai.service.ts (modified)"
+        "packages/backend/src/routes/document.ts"
       ],
       "research_sources": []
     },
-    "for_teamlead": "T1 DONE. Extracted two inline AI prompts from ai.service.ts into a new dedicated module at packages/backend/src/prompts/document-prompts.ts. Each prompt is now a pure exported function with JSDoc. ai.service.ts imports and calls getMainPrompt/getFixPrompt instead of inlining strings. tsc --noEmit passes cleanly. No behavioral change — prompt text is byte-identical to original.",
-    "for_successor": "No specific successor — this is a self-contained T1 refactor. The next step is team lead decision: commit or move on."
+    "for_teamlead": "DONE. Validation service wired into document generation route. Import added (line 7), validateRequisites called after AI result (line 50), validation event sent to frontend (lines 52-59), missing fields replaced with [Заполнить] placeholder (lines 67-73). TypeScript compiles clean. File is 151 lines.",
+    "for_successor": "Next: test-engineer — write unit test for the validation wiring in document.ts route (mock aiResult with missing requisites, assert validation event is sent)."
   }
 }

@@ -20,6 +20,7 @@ export function DocumentGenerator() {
   const [status, setStatus] = useState('');
   const [showTypst, setShowTypst] = useState(true);
   const [retryAttempts, setRetryAttempts] = useState<RetryAttempt[]>([]);
+  const [missingFields, setMissingFields] = useState<{field: string, label: string}[]>([]);
   const typstRef = useRef<HTMLPreElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
 
@@ -29,6 +30,7 @@ export function DocumentGenerator() {
     setTypstOutput('');
     setStatus('');
     setRetryAttempts([]);
+    setMissingFields([]);
   };
 
   const handleGenerate = async () => {
@@ -100,6 +102,10 @@ export function DocumentGenerator() {
                   }
                   return updated;
                 });
+                break;
+
+              case 'validation':
+                setMissingFields(data.missing);
                 break;
 
               case 'status':
@@ -344,6 +350,23 @@ export function DocumentGenerator() {
                 {typstOutput}
               </pre>
             )}
+          </div>
+        )}
+
+        {/* Missing Fields Warning */}
+        {missingFields.length > 0 && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+            <h4 className="text-yellow-800 font-medium mb-2">
+              ⚠️ Отсутствуют обязательные реквизиты:
+            </h4>
+            <ul className="list-disc list-inside text-yellow-700">
+              {missingFields.map(f => (
+                <li key={f.field}>{f.label}</li>
+              ))}
+            </ul>
+            <p className="text-sm text-yellow-600 mt-2">
+              В документе они будут помечены как [Заполнить]
+            </p>
           </div>
         )}
 
