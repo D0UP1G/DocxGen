@@ -27,3 +27,9 @@ tmp/
 
 # Data directory (orchestration metadata)
 data/
+
+# Spec files (generated documents)
+spec/
+*.typ
+*.pdf
+*.docx
