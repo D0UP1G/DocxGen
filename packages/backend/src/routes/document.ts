@@ -13,7 +13,7 @@ router.post('/generate', async (req: Request, res: Response) => {
   let tmpDir: string | undefined;
 
   try {
-    const { text } = req.body;
+    const { text, documentType = 'sluzhebnaya' } = req.body;
     if (!text || typeof text !== 'string') {
       return res.status(400).json({ error: 'Text is required' });
     }
@@ -32,11 +32,22 @@ router.post('/generate', async (req: Request, res: Response) => {
     console.log('📝 Generating document from text...');
 
     // Step 1: Stream AI response
-    sendEvent('status', 'Генерация Typst-разметки...');
-    let typstContent = await generateTypstStream(text, (chunk) => {
+    sendEvent('status', 'Анализ текста и извлечение реквизитов...');
+    const aiResult = await generateTypstStream(text, documentType, (chunk) => {
       sendEvent('chunk', chunk);
     });
-    console.log('✅ Typst generated');
+    console.log('✅ AI processing complete');
+
+    // Send structured data to frontend
+    sendEvent('ai_result', JSON.stringify({
+      correctedText: aiResult.correctedText,
+      requisites: aiResult.requisites,
+      documentType: aiResult.documentType,
+    }));
+
+    // Step 2: Generate Typst from structured data (will be implemented next)
+    // For now, use the corrected text
+    let typstContent = aiResult.correctedText;
 
     // Step 2: Compile with retry loop
     let attempt = 0;

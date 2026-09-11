@@ -131,38 +131,87 @@ function runInContainer(
  * Calls `onChunk` for every token received.
  * Returns the full accumulated Typst content when done.
  */
+export interface AiProcessedDocument {
+  correctedText: string;
+  requisites: {
+    to: string;        // Кому (recipient)
+    from: string;      // От кого (sender)
+    date: string;      // Дата
+    subject: string;   // Заголовок/тема
+    number: string;    // Номер документа
+  };
+  documentType: 'sluzhebnaya' | 'dokladnaya' | 'informacionnaya' | 'pismo';
+}
+
 export async function generateTypstStream(
   userText: string,
+  documentType: string,
   onChunk: (chunk: string) => void,
-): Promise<string> {
-  const prompt = `Generate a ГОСТ-compliant Typst document from the following Russian text content. The document MUST follow ГОСТ standards for Russian business documentation (ГОСТ Р 7.0.5-2008, ГОСТ 2.105-95, ГОСТ Р 6.30-2003).
+): Promise<AiProcessedDocument> {
+  const typeNames: Record<string, string> = {
+    sluzhebnaya: 'Служебная записка',
+    dokladnaya: 'Докладная записка',
+    informacionnaya: 'Информационная справка',
+    pismo: 'Письмо',
+  };
 
-ГОСТ Requirements (MANDATORY):
-- Output ONLY valid Typst markup (no markdown fences, no explanations)
-- A4 paper with ГОСТ margins: left 3cm, right 1.5cm, top 2cm, bottom 2cm
-- Font: Times New Roman (or Libertinus Serif as fallback), body text 14pt
-- Line spacing: 1.5 (0.83em leading), first-line indent: 1.25cm
-- Headings: 12-14pt, bold
-- Document header (шапка): Кому, От кого, Дата, Номер, Заголовок
-- Signature block (подпись) at the end with lines for signatures
-- Russian typography: use «» for quotes, — for em-dash (not hyphen), non-breaking spaces after initials (И. И.)
-- Include visual elements: tables with borders, colored boxes, metric cards where appropriate
-- Tables must use stroke: 0.5pt for proper ГОСТ borders
-- All content must be in Russian
-- Use proper Typst syntax
+  const prompt = `Ты — ИИ-ассистент для подготовки служебных документов. Проанализируй текст ниже и верни JSON.
 
-Content to format:
+Тип документа: ${typeNames[documentType] || 'Служебная записка'}
+
+ЗАДАЧА:
+1. Исправь орфографические, пунктуационные и грамматические ошибки
+2. Приведи формулировки к официально-деловому стилю
+3. Извлеки реквизиты: Кому, От кого, Дата, Тема, Номер
+4. НЕ добавляй факты, даты, фамилии которых нет в исходном тексте
+5. Если реквизит отсутствует — поставь пустую строку ""
+
+ФОРМАТ ОТВЕТА — ТОЛЬКО JSON (без markdown, без комментариев):
+{
+  "correctedText": "Исправленный текст документа в официально-деловом стиле",
+  "requisites": {
+    "to": "Кому или пустая строка",
+    "from": "От кого или пустая строка", 
+    "date": "Дата или пустая строка",
+    "subject": "Тема/заголовок или пустая строка",
+    "number": "Номер или пустая строка"
+  },
+  "documentType": "${documentType}"
+}
+
+Исходный текст:
 ${userText}`;
 
   const result = await runInContainer(prompt, onChunk, 'typst-generator');
   
   // Clean up: remove markdown fences if AI wrapped them
   const cleaned = result
-    .replace(/^```typst\n?/gm, '')
+    .replace(/^```json\n?/gm, '')
     .replace(/^```\n?/gm, '')
     .trim();
   
-  return cleaned;
+  // Parse JSON response
+  try {
+    const parsed = JSON.parse(cleaned);
+    return {
+      correctedText: parsed.correctedText || userText,
+      requisites: {
+        to: parsed.requisites?.to || '',
+        from: parsed.requisites?.from || '',
+        date: parsed.requisites?.date || '',
+        subject: parsed.requisites?.subject || '',
+        number: parsed.requisites?.number || '',
+      },
+      documentType: (parsed.documentType || documentType) as AiProcessedDocument['documentType'],
+    };
+  } catch (e) {
+    // If JSON parsing fails, return the raw text as correctedText
+    return {
+      correctedText: cleaned,
+      requisites: { to: '', from: '', date: '', subject: '', number: '' },
+      documentType: documentType as AiProcessedDocument['documentType'],
+    };
+  }
 }
 
 /**
