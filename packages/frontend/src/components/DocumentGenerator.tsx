@@ -12,6 +12,13 @@ interface RetryAttempt {
   fixProgress: string;
 }
 
+const DOCUMENT_TYPES = [
+  { id: 'sluzhebnaya', label: 'Служебная записка', description: 'Внутренняя переписка' },
+  { id: 'dokladnaya', label: 'Докладная записка', description: 'Формальный отчёт' },
+  { id: 'informacionnaya', label: 'Информационная справка', description: 'Справка с фактами' },
+  { id: 'pismo', label: 'Письмо', description: 'Внешняя корреспонденция' },
+];
+
 export function DocumentGenerator() {
   const [text, setText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -22,6 +29,7 @@ export function DocumentGenerator() {
   const [retryAttempts, setRetryAttempts] = useState<RetryAttempt[]>([]);
   const [missingFields, setMissingFields] = useState<{field: string, label: string}[]>([]);
   const [templateId, setTemplateId] = useState('official');
+  const [documentType, setDocumentType] = useState('sluzhebnaya');
   const typstRef = useRef<HTMLPreElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
 
@@ -43,7 +51,7 @@ export function DocumentGenerator() {
       const response = await fetch('http://localhost:3001/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, templateId }),
+        body: JSON.stringify({ text, templateId, documentType }),
       });
 
       if (!response.ok) {
@@ -255,18 +263,43 @@ export function DocumentGenerator() {
           className="resize-none"
         />
 
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Шаблон оформления
-          </label>
-          <select
-            value={templateId}
-            onChange={(e) => setTemplateId(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="official">Официальный (ГОСТ)</option>
-            <option value="standard">Стандартный</option>
-          </select>
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Тип документа
+            </label>
+            <select
+              value={documentType}
+              onChange={(e) => setDocumentType(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            >
+              {DOCUMENT_TYPES.map((type) => (
+                <option key={type.id} value={type.id}>
+                  {type.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-500 mt-1">
+              {DOCUMENT_TYPES.find(t => t.id === documentType)?.description}
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Шаблон оформления
+            </label>
+            <select
+              value={templateId}
+              onChange={(e) => setTemplateId(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="official">Официальный (ГОСТ)</option>
+              <option value="standard">Стандартный</option>
+            </select>
+            <p className="text-xs text-gray-500 mt-1">
+              {templateId === 'official' ? 'Строгий формат по ГОСТ' : 'Упрощённый стиль'}
+            </p>
+          </div>
         </div>
 
         {/* Current Status */}
