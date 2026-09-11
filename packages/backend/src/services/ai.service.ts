@@ -18,7 +18,15 @@ function getHeaders() {
   };
 }
 
-export async function generateTypstFromText(userText: string): Promise<string> {
+/**
+ * Streams Typst generation from the AI API.
+ * Calls `onChunk` for every token received.
+ * Returns the full accumulated Typst content when done.
+ */
+export async function generateTypstStream(
+  userText: string,
+  onChunk: (chunk: string) => void,
+): Promise<string> {
   const response = await fetch(OPENCODE_API_URL, {
     method: 'POST',
     headers: getHeaders(),
@@ -37,7 +45,6 @@ export async function generateTypstFromText(userText: string): Promise<string> {
     throw new Error(`AI API error: ${response.status} ${response.statusText}`);
   }
 
-  // Parse SSE stream
   const reader = response.body!.getReader();
   const decoder = new TextDecoder();
   let result = '';
@@ -47,10 +54,10 @@ export async function generateTypstFromText(userText: string): Promise<string> {
     const { done, value } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
-    
+
     const lines = buffer.split('\n');
     buffer = lines.pop() || '';
-    
+
     for (const line of lines) {
       if (line.startsWith('data: ')) {
         const data = line.slice(6);
@@ -58,7 +65,10 @@ export async function generateTypstFromText(userText: string): Promise<string> {
         try {
           const parsed = JSON.parse(data);
           const content = parsed.choices?.[0]?.delta?.content;
-          if (content) result += content;
+          if (content) {
+            result += content;
+            onChunk(content);
+          }
         } catch {}
       }
     }
