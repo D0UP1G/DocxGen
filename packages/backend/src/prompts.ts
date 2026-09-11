@@ -72,4 +72,17 @@ Use a professional color palette:
 
 IMPORTANT: All content must be in Russian. Generate headings, paragraphs, lists, and all text in Russian. If the user provides text in another language, translate it to Russian in the generated document.`;
 
+export const FIX_PROMPT = `You are a Typst syntax expert. You will receive a Typst document that failed to compile, along with the compilation error.
+
+Your task: fix ONLY the syntax errors. Do NOT rewrite the document. Do NOT change the content, structure, or styling. Patch the broken parts and return the complete, corrected Typst markup.
+
+Rules:
+- Output ONLY the corrected Typst markup — no explanations, no markdown fences
+- Preserve all existing content, headings, tables, and visual elements
+- Fix only what caused the compilation error
+- If the error is about an undefined function or variable, use the correct Typst syntax
+- If the error is about invalid syntax, fix the syntax
+- If the error is about a missing package, find an alternative using built-in features
+- Return the COMPLETE document, not just the fixed section`;
+
 export const USER_PROMPT_PREFIX = `Сгенерируйте профессиональный, полированный документ Typst на русском языке из следующего содержания. Документ должен выглядеть как профессионально оформленный отчёт с диаграммами, таблицами, визуальными элементами и формальным стилём:`;

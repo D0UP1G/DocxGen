@@ -1,13 +1,17 @@
 import { Router, Request, Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
-import { generateTypstStream } from '../services/ai.service';
-import { compileTypst } from '../services/typst.service';
+import { generateTypstStream, fixTypstErrors } from '../services/ai.service';
+import { compileTypstContent, retryCompile } from '../services/typst.service';
 import { convertToDocx } from '../services/pandoc.service';
+
+const MAX_RETRIES = 3;
 
 const router = Router();
 
 router.post('/generate', async (req: Request, res: Response) => {
+  let tmpDir: string | undefined;
+
   try {
     const { text } = req.body;
     if (!text || typeof text !== 'string') {
@@ -29,25 +33,65 @@ router.post('/generate', async (req: Request, res: Response) => {
 
     // Step 1: Stream AI response
     sendEvent('status', 'Генерация Typst-разметки...');
-    const typstContent = await generateTypstStream(text, (chunk) => {
+    let typstContent = await generateTypstStream(text, (chunk) => {
       sendEvent('chunk', chunk);
     });
     console.log('✅ Typst generated');
 
-    // Step 2: Signal compilation start
-    sendEvent('status', 'Компиляция Typst в PDF...');
-    sendEvent('typst', typstContent);
+    // Step 2: Compile with retry loop
+    let attempt = 0;
+    let compiled = false;
 
-    // Step 3: Compile Typst to PDF
-    const pdfPath = await compileTypst(typstContent);
-    console.log('✅ PDF compiled');
+    while (attempt < MAX_RETRIES) {
+      attempt++;
+      sendEvent('status', `Компиляция Typst (попытка ${attempt}/${MAX_RETRIES})...`);
+      sendEvent('typst', typstContent);
 
-    // Step 4: Convert to DOCX
+      const result = await compileTypstContent(typstContent);
+      tmpDir = result.tmpDir;
+
+      if (result.success) {
+        compiled = true;
+        console.log(`✅ PDF compiled on attempt ${attempt}`);
+        break;
+      }
+
+      // Compilation failed — send error to AI for fix
+      console.log(`⚠️ Attempt ${attempt} failed: ${result.error}`);
+
+      if (attempt < MAX_RETRIES) {
+        sendEvent('status', `Ошибка компиляции. ИИ исправляет... (попытка ${attempt}/${MAX_RETRIES})`);
+        sendEvent('compile_error', result.error!);
+
+        try {
+          typstContent = await fixTypstErrors(text, typstContent, result.error!, (chunk) => {
+            sendEvent('fix_chunk', chunk);
+          });
+          console.log(`✅ Typst fixed by AI (attempt ${attempt + 1})`);
+        } catch (fixError: any) {
+          console.error(`❌ AI fix failed: ${fixError.message}`);
+          // If AI fix fails, break and report the original error
+          break;
+        }
+      }
+    }
+
+    if (!compiled) {
+      const errorMsg = `Компиляция Typst завершилась после ${MAX_RETRIES} попыток. Последняя ошибка: ${tmpDir ? fs.readFileSync(path.join(tmpDir, 'document.typ'), 'utf-8').slice(0, 200) : 'unknown'}`;
+      sendEvent('error', errorMsg);
+      res.end();
+      return;
+    }
+
+    // Step 3: Convert to DOCX
     sendEvent('status', 'Конвертация PDF в DOCX...');
-    const docxPath = await convertToDocx(pdfPath, typstContent);
+    const docxPath = await convertToDocx(
+      path.join(tmpDir!, 'document.pdf'),
+      typstContent,
+    );
     console.log('✅ DOCX converted');
 
-    // Step 5: Read file and send as base64
+    // Step 4: Read file and send as base64
     const docxBuffer = fs.readFileSync(docxPath);
     const docxBase64 = docxBuffer.toString('base64');
 
@@ -55,14 +99,12 @@ router.post('/generate', async (req: Request, res: Response) => {
     console.log('✅ Document ready for download');
 
     // Cleanup
-    const tmpDir = path.dirname(pdfPath);
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    fs.rmSync(tmpDir!, { recursive: true, force: true });
 
     res.end();
 
   } catch (error: any) {
     console.error('❌ Generation failed:', error.message);
-    // If headers already sent, send error as SSE event
     if (res.headersSent) {
       res.write(`event: error\ndata: ${JSON.stringify(error.message)}\n\n`);
       res.end();

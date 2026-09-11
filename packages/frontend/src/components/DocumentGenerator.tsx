@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Download, Loader2, FileText, Code, ChevronDown, ChevronUp } from 'lucide-react';
+import { Download, Loader2, FileText, Code, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
 
 export function DocumentGenerator() {
   const [text, setText] = useState('');
@@ -11,6 +11,7 @@ export function DocumentGenerator() {
   const [typstOutput, setTypstOutput] = useState('');
   const [status, setStatus] = useState('');
   const [showTypst, setShowTypst] = useState(true);
+  const [compileErrors, setCompileErrors] = useState<string[]>([]);
   const typstRef = useRef<HTMLPreElement>(null);
 
   const handleGenerate = async () => {
@@ -20,6 +21,7 @@ export function DocumentGenerator() {
     setError(null);
     setTypstOutput('');
     setStatus('');
+    setCompileErrors([]);
 
     try {
       const response = await fetch('http://localhost:3001/api/generate', {
@@ -69,7 +71,6 @@ export function DocumentGenerator() {
               case 'chunk':
                 setTypstOutput((prev) => {
                   const next = prev + data;
-                  // Auto-scroll
                   setTimeout(() => {
                     typstRef.current?.scrollTo(0, typstRef.current.scrollHeight);
                   }, 0);
@@ -77,17 +78,26 @@ export function DocumentGenerator() {
                 });
                 break;
 
+              case 'fix_chunk':
+                // AI is fixing — replace output with patched version
+                setTypstOutput((prev) => prev + data);
+                break;
+
               case 'status':
                 setStatus(data);
                 break;
 
               case 'typst':
-                // Full Typst content — replace any accumulated chunks
                 setTypstOutput(data);
                 break;
 
+              case 'compile_error':
+                setCompileErrors((prev) => [...prev, data]);
+                // Clear the typst output since AI will regenerate
+                setTypstOutput('');
+                break;
+
               case 'done':
-                // Decode base64 and trigger download
                 const binary = atob(data);
                 const bytes = new Uint8Array(binary.length);
                 for (let i = 0; i < binary.length; i++) {
@@ -149,6 +159,19 @@ export function DocumentGenerator() {
           <div className="text-sm text-blue-600 bg-blue-50 dark:bg-blue-950 dark:text-blue-400 p-3 rounded-md flex items-center gap-2">
             <Loader2 className="h-4 w-4 animate-spin" />
             {status}
+          </div>
+        )}
+
+        {compileErrors.length > 0 && (
+          <div className="space-y-2">
+            {compileErrors.map((err, i) => (
+              <div key={i} className="text-xs text-amber-700 bg-amber-50 dark:bg-amber-950 dark:text-amber-400 p-3 rounded-md flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                <span className="break-all">
+                  Ошибка компиляции #{i + 1}: {err.slice(0, 300)}{err.length > 300 ? '...' : ''}
+                </span>
+              </div>
+            ))}
           </div>
         )}
 
