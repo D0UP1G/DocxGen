@@ -1,4 +1,5 @@
 import * as crypto from 'crypto';
+import { SYSTEM_PROMPT } from '../prompts.js';
 
 const OPENCODE_API_URL = 'https://opencode.ai/zen/v1/chat/completions';
 
@@ -16,12 +17,6 @@ function getHeaders() {
     'User-Agent': 'opencode/1.18.15',
   };
 }
-
-const SYSTEM_PROMPT = `You are a document generator. Convert the user's content into valid Typst markup.
-Output ONLY the Typst markup, nothing else — no markdown fences, no explanations.
-Use proper Typst syntax: = for headings, - for unordered lists, + for ordered lists, $ for math, # for functions.
-Structure the document with a title, sections, and proper formatting.
-Make it look professional and well-organized.`;
 
 export async function generateTypstFromText(userText: string): Promise<string> {
   const response = await fetch(OPENCODE_API_URL, {
