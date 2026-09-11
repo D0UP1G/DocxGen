@@ -5,6 +5,7 @@ node_modules/
 # Build output
 dist/
 build/
+*.tsbuildinfo
 
 # Environment
 .env
@@ -16,20 +17,28 @@ build/
 .idea/
 *.swp
 *.swo
+*~
 
 # OS
 .DS_Store
 Thumbs.db
 
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Test coverage
+coverage/
+.nyc_output/
+
 # Temp files
 tmp/
-*.tmp
+tmp-*
 
-# Data directory (orchestration metadata)
-data/
+# OpenCode
+.opencode/sessions/
+.opencode/todos/
 
-# Spec files (generated documents)
-spec/
-*.typ
-*.pdf
-*.docx
+# Container
+*.tar
