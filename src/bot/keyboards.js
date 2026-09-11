@@ -1,0 +1,129 @@
+/**
+ * Keyboard builders for the dialog engine.
+ *
+ * Each builder returns Button[][] — an array of rows, each row an array of buttons.
+ * Buttons carry encoded payloads (max 64 chars) that the adapter renders as
+ * platform-specific inline keyboards. The stateVersion 'r' field is injected
+ * so the dispatcher can reject stale button presses.
+ *
+ * Why keyboards are separate from texts: texts.js owns user-facing copy;
+ * keyboards.js owns actionable button structures with encoded payloads.
+ * This separation keeps copy changes (texts) independent from behavior changes (buttons).
+ */
+
+import { encode } from './payload.js';
+
+/**
+ * Main menu keyboard — shown in idle state.
+ * @param {number} stateVersion
+ * @returns {import('./flow.js').Button[][]}
+ */
+export function mainKeyboard(stateVersion = 0) {
+  return [[{ label: 'Создать документ', action: encode({ a: 'new', r: stateVersion }) }]];
+}
+
+/**
+ * Draft collection keyboard — shown while building the draft.
+ * @param {number} stateVersion
+ * @returns {import('./flow.js').Button[][]}
+ */
+export function draftKeyboard(stateVersion = 0) {
+  return [
+    [{ label: 'Продолжить', action: encode({ a: 'continue', r: stateVersion }) }],
+    [
+      { label: 'Показать черновик', action: encode({ a: 'show_draft', r: stateVersion }) },
+      { label: 'Заменить текст', action: encode({ a: 'replace_mode', r: stateVersion }) },
+    ],
+  ];
+}
+
+/**
+ * Document type keyboard — one button per type.
+ * @param {Array<{ id: string, name: string }>} docTypes
+ * @param {number} stateVersion
+ * @returns {import('./flow.js').Button[][]}
+ */
+export function typeKeyboard(docTypes, stateVersion = 0) {
+  return docTypes.map(dt => [
+    { label: dt.name, action: encode({ a: 'set_type', v: dt.id, r: stateVersion }) },
+  ]);
+}
+
+/**
+ * Template keyboard — one button per template with description.
+ * @param {Array<{ id: string, name: string, description: string }>} templates
+ * @param {number} stateVersion
+ * @returns {import('./flow.js').Button[][]}
+ */
+export function templateKeyboard(templates, stateVersion = 0) {
+  return templates.map(t => [
+    { label: `${t.name} — ${t.description}`, action: encode({ a: 'set_template', v: t.id, r: stateVersion }) },
+  ]);
+}
+
+/**
+ * Field answer keyboard — shown when asking for a missing required field.
+ * @param {number} stateVersion
+ * @returns {import('./flow.js').Button[][]}
+ */
+export function fieldKeyboard(stateVersion = 0) {
+  return [
+    [{ label: 'Оставить незаполненным', action: encode({ a: 'skip_field', r: stateVersion }) }],
+    [{ label: 'Пропустить остальные', action: encode({ a: 'skip_all', r: stateVersion }) }],
+  ];
+}
+
+/**
+ * Post-processing keyboard — shown after document is ready.
+ * @param {number} stateVersion
+ * @returns {import('./flow.js').Button[][]}
+ */
+export function resultKeyboard(stateVersion = 0) {
+  return [
+    [{ label: 'Отправить', action: encode({ a: 'deliver', r: stateVersion }) }],
+    [
+      { label: 'Другой шаблон', action: encode({ a: 'other_template', r: stateVersion }) },
+      { label: 'Другой тип', action: encode({ a: 'other_type', r: stateVersion }) },
+    ],
+    [{ label: 'Изменить текст', action: encode({ a: 'edit_text', r: stateVersion }) }],
+  ];
+}
+
+/**
+ * Retry keyboard — shown on AI failure.
+ * @param {number} stateVersion
+ * @returns {import('./flow.js').Button[][]}
+ */
+export function retryKeyboard(stateVersion = 0) {
+  return [
+    [{ label: 'Повторить', action: encode({ a: 'retry', r: stateVersion }) }],
+    [
+      { label: 'Показать черновик', action: encode({ a: 'show_draft', r: stateVersion }) },
+      { label: 'Новый документ', action: encode({ a: 'new', r: stateVersion }) },
+    ],
+  ];
+}
+
+/**
+ * Warning confirmation keyboard — shown when AI added facts.
+ * @param {number} stateVersion
+ * @returns {import('./flow.js').Button[][]}
+ */
+export function warningKeyboard(stateVersion = 0) {
+  return [
+    [{ label: 'Всё верно', action: encode({ a: 'deliver', r: stateVersion }) }],
+    [{ label: 'Повторить обработку', action: encode({ a: 'retry', r: stateVersion }) }],
+    [{ label: 'Изменить текст', action: encode({ a: 'edit_text', r: stateVersion }) }],
+  ];
+}
+
+/**
+ * Resend keyboard — shown on delivery failure.
+ * @param {number} stateVersion
+ * @returns {import('./flow.js').Button[][]}
+ */
+export function resendKeyboard(stateVersion = 0) {
+  return [
+    [{ label: 'Отправить ещё раз', action: encode({ a: 'resend', r: stateVersion }) }],
+  ];
+}
