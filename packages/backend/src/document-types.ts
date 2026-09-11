@@ -11,6 +11,18 @@
 /** Identifiers for each supported document type. */
 export type DocumentTypeId = "sluzhebnaya" | "dokladnaya" | "informacionnaya" | "pismo";
 
+/** Structured fields that can be extracted from a draft. */
+export type RequisiteKey =
+  | "to"
+  | "from"
+  | "date"
+  | "subject"
+  | "number"
+  | "position"
+  | "signature"
+  | "greeting"
+  | "executor";
+
 /** Section structure of a document type (ordered list of section keys). */
 export type SectionKey =
   | "header"
@@ -35,7 +47,7 @@ export interface DocumentType {
   /** Ordered section keys that make up the document structure. */
   sections: SectionKey[];
   /** Fields from Requisites that are mandatory for this document type. */
-  requiredFields: (keyof Requisites)[];
+  requiredFields: RequisiteKey[];
 }
 
 /**
@@ -52,8 +64,16 @@ export interface Requisites {
   date: string;
   /** Тема — subject line. */
   subject: string;
-  /** Номер — document number (required only for Письмо). */
+  /** Номер — document number (required for служебная/докладная/письмо). */
   number?: string;
+  /** Должность автора/отправителя. */
+  position?: string;
+  /** Подписант или текст подписи. */
+  signature?: string;
+  /** Обращение в письме. */
+  greeting?: string;
+  /** Исполнитель (опционально). */
+  executor?: string;
 }
 
 /**
@@ -67,7 +87,7 @@ export const DOCUMENT_TYPES: Record<DocumentTypeId, DocumentType> = {
     nameTranslit: "sluzhebnaya",
     description: "Internal memo — short, informal, for intra-org communication.",
     sections: ["header", "body", "signature"],
-    requiredFields: ["to", "from", "date", "subject"],
+    requiredFields: ["to", "from", "position", "date", "number", "subject", "signature"],
   },
   dokladnaya: {
     id: "dokladnaya",
@@ -75,7 +95,7 @@ export const DOCUMENT_TYPES: Record<DocumentTypeId, DocumentType> = {
     nameTranslit: "dokladnaya",
     description: "Report memo — formal report with a conclusion section.",
     sections: ["header", "body", "conclusion", "signature"],
-    requiredFields: ["to", "from", "date", "subject"],
+    requiredFields: ["to", "from", "position", "date", "number", "subject", "signature"],
   },
   informacionnaya: {
     id: "informacionnaya",
@@ -83,7 +103,7 @@ export const DOCUMENT_TYPES: Record<DocumentTypeId, DocumentType> = {
     nameTranslit: "informacionnaya",
     description: "Information report — facts, analysis, and conclusion.",
     sections: ["header", "facts", "analysis", "conclusion"],
-    requiredFields: ["to", "from", "date", "subject"],
+    requiredFields: ["from", "date", "subject", "signature"],
   },
   pismo: {
     id: "pismo",
@@ -91,7 +111,7 @@ export const DOCUMENT_TYPES: Record<DocumentTypeId, DocumentType> = {
     nameTranslit: "pismo",
     description: "Letter — formal external correspondence with greeting and closing.",
     sections: ["header", "greeting", "body", "closing", "signature"],
-    requiredFields: ["to", "from", "date", "subject", "number"],
+    requiredFields: ["to", "from", "position", "date", "number", "subject", "signature"],
   },
 };
 

@@ -6,7 +6,7 @@
  * import this module and register themselves here.
  */
 
-import { Requisites } from '../document-types';
+import { Requisites } from '../document-types.js';
 
 /**
  * Data passed to every template's `generate` function.
@@ -57,8 +57,8 @@ export function escapeTypst(text: string): string {
 }
 
 // Individual templates register themselves here.
-import { officialTemplate } from './official';
-import { standardTemplate } from './standard';
+import { officialTemplate } from './official.js';
+import { standardTemplate } from './standard.js';
 
 /** Registry mapping template IDs to their template objects. */
 export const TEMPLATES: Record<string, TypstTemplate> = {

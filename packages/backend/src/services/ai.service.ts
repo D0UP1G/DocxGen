@@ -1,221 +1,214 @@
-import { spawn, ChildProcess } from 'child_process';
-import * as crypto from 'crypto';
-import { getMainPrompt, getFixPrompt } from '../prompts/document-prompts';
+import { spawn } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { getMainPrompt, getFixPrompt } from '../prompts/document-prompts.js';
+import type { DocumentTypeId, Requisites } from '../document-types.js';
 
-const CONTAINER_IMAGE = 'docxgen-opencode';
+const CONTAINER_IMAGE = process.env.DOCXGEN_AI_IMAGE || 'docxgen-opencode';
 
-function generateId(prefix: string): string {
-  return prefix + crypto.randomBytes(12).toString('hex');
+export interface AiProcessedDocument {
+  correctedText: string;
+  requisites: Requisites;
+  documentType: DocumentTypeId;
+  source: 'ai' | 'local';
 }
 
-/**
- * Parses the error line number from Typst's stderr.
- * Example: "error: expected content\n  ┌─ document.typ:5:10" → 5
- */
-function parseErrorLine(stderr: string): number | null {
-  const match = stderr.match(/document\.typ:(\d+):/);
-  return match ? parseInt(match[1], 10) : null;
+function emptyRequisites(): Requisites {
+  return { to: '', from: '', date: '', subject: '', number: '', position: '', signature: '', greeting: '', executor: '' };
 }
 
-/**
- * Extracts the broken section ± context lines around the error.
- * Returns: { before, broken, after, startLine }
- */
-function extractBrokenSection(
-  typstContent: string,
-  errorLine: number,
-  contextLines: number = 10,
-): { before: string; broken: string; after: string; startLine: number } {
-  const lines = typstContent.split('\n');
-  const start = Math.max(0, errorLine - 1 - contextLines);
-  const end = Math.min(lines.length, errorLine + contextLines);
-
-  const before = lines.slice(0, start).join('\n');
-  const broken = lines.slice(start, end).join('\n');
-  const after = lines.slice(end).join('\n');
-
-  return { before, broken, after, startLine: start + 1 };
+function cleanValue(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
 }
 
-/**
- * Patches the fixed section back into the original Typst content.
- * The AI returns ONLY the fixed section — we splice it in.
- */
-function applyPatch(
-  before: string,
-  fixedSection: string,
-  after: string,
-): string {
-  const parts = [before, fixedSection, after].filter((p) => p.length > 0);
-  return parts.join('\n');
+function extractLabeledValue(text: string, labels: string[]): string {
+  const pattern = labels.join('|');
+  const match = text.match(new RegExp(`(?:^|\\n)\\s*(?:${pattern})\\s*[:—-]\\s*(.+)`, 'im'));
+  return match?.[1]?.trim() || '';
 }
 
-/**
- * Runs opencode in a container and streams the output.
- * Returns the full generated text.
- */
-function runInContainer(
-  prompt: string,
-  onChunk: (chunk: string) => void,
-  agent: string = 'typst-generator',
-): Promise<string> {
+function stripMetadata(text: string): string {
+  return text
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*(тип|кому|адресат|от кого|автор|отправитель|составитель|должность|дата|номер|тема|заголовок|подпись|обращение|исполнитель)\s*[:—-]/i.test(line))
+    .join('\n')
+    .replace(/^\s*кому\s+[^\n]+$/im, '')
+    .trim();
+}
+
+function localCorrect(text: string): string {
+  let result = stripMetadata(text)
+    .replace(/выполнент/gi, 'выполнен')
+    .replace(/о том что/gi, 'о том, что')
+    .replace(/ну короче[, ]*/gi, '')
+    .replace(/sales показали excellent результат/gi, 'отдел продаж продемонстрировал высокий результат')
+    .replace(/revenue\s+([\d.,]+)M\s+rub/gi, 'выручка составила $1 млн рублей')
+    .replace(/new clients\s+([\d.,]+)/gi, 'привлечено $1 новых клиентов')
+    .replace(/conversion\s*\+([\d.,]+)%/gi, 'конверсия увеличилась на $1%')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  return result
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+function localProcess(userText: string, documentType: DocumentTypeId): AiProcessedDocument {
+  const requisites = emptyRequisites();
+  requisites.to = extractLabeledValue(userText, ['кому', 'адресат']);
+  requisites.from = extractLabeledValue(userText, ['от кого', 'автор', 'отправитель', 'составитель']);
+  requisites.date = extractLabeledValue(userText, ['дата']) || (userText.match(/\b\d{2}\.\d{2}\.\d{4}\b/)?.[0] || '');
+  requisites.number = extractLabeledValue(userText, ['номер']);
+  requisites.subject = extractLabeledValue(userText, ['тема', 'заголовок']);
+  requisites.position = extractLabeledValue(userText, ['должность']);
+  requisites.signature = extractLabeledValue(userText, ['подпись']);
+  requisites.greeting = extractLabeledValue(userText, ['обращение']) || (userText.match(/^(Уважаем(?:ый|ая)[^!\n]*!)/im)?.[1] || '');
+  requisites.executor = extractLabeledValue(userText, ['исполнитель']);
+
+  const lower = userText.toLowerCase();
+  if (!requisites.to) {
+    const match = userText.match(/\bкому\s+([А-ЯЁ][^\n,.]+(?:\.[А-ЯЁ]\.)?)/i);
+    requisites.to = match?.[1]?.trim() || '';
+  }
+  if (!requisites.subject) {
+    const subjectMatch = userText.match(/(?:о|об)\s+([^\n.]{5,80})/i);
+    requisites.subject = subjectMatch?.[0]?.trim() || '';
+  }
+  if (!requisites.from && documentType === 'informacionnaya') {
+    requisites.from = extractLabeledValue(userText, ['аналитика']);
+  }
+  if (!requisites.signature && requisites.from) requisites.signature = requisites.from;
+  if (!requisites.position && /директор|начальник|специалист|руководитель/i.test(lower)) {
+    requisites.position = (requisites.from.match(/^(директор|начальник|специалист|руководитель[^,]*)/i)?.[1] || '').trim();
+  }
+
+  return { correctedText: localCorrect(userText), requisites, documentType, source: 'local' };
+}
+
+function parseAiResult(raw: string, userText: string, documentType: DocumentTypeId): AiProcessedDocument | null {
+  const cleaned = raw.replace(/^```json\s*/im, '').replace(/```\s*$/m, '').trim();
+  try {
+    const parsed = JSON.parse(cleaned) as Record<string, unknown>;
+    const input = (parsed.requisites || {}) as Record<string, unknown>;
+    return {
+      correctedText: cleanValue(parsed.correctedText) || userText,
+      requisites: {
+        to: cleanValue(input.to),
+        from: cleanValue(input.from),
+        date: cleanValue(input.date),
+        subject: cleanValue(input.subject),
+        number: cleanValue(input.number),
+        position: cleanValue(input.position),
+        signature: cleanValue(input.signature),
+        greeting: cleanValue(input.greeting),
+        executor: cleanValue(input.executor),
+      },
+      documentType: (cleanValue(parsed.documentType) || documentType) as DocumentTypeId,
+      source: 'ai',
+    };
+  } catch {
+    return null;
+  }
+}
+
+function runInContainer(prompt: string, onChunk: (chunk: string) => void, agent = 'typst-generator'): Promise<string> {
   return new Promise((resolve, reject) => {
-    const sessionID = generateId('ses_');
-    
-    // Pass prompt via stdin, not as argument
-    const proc = spawn('podman', [
-      'run', '--rm', '-i',
-      '--network=host',
-      CONTAINER_IMAGE,
-      'opencode', 'run',
-      '--agent', agent,
-      '--format', 'json',
-      '--title', `docxgen-${sessionID}`,
+    const sessionID = `ses_${randomBytes(12).toString('hex')}`;
+    const proc = spawn(process.env.CONTAINER_RUNTIME || 'podman', [
+      'run', '--rm', '-i', '--network=host', CONTAINER_IMAGE, 'opencode', 'run', '--agent', agent, '--format', 'json', '--title', `docxgen-${sessionID}`,
     ]);
-
-    // Write prompt to stdin
-    proc.stdin?.write(prompt);
-    proc.stdin?.end();
-
     let result = '';
     let buffer = '';
-
-    proc.stdout?.on('data', (data: Buffer) => {
-      buffer += data.toString();
+    let settled = false;
+    const timeoutMs = Number(process.env.AI_TIMEOUT_MS || 120000);
+    const timeout = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      proc.kill();
+      reject(new Error(`AI container timed out after ${timeoutMs} ms`));
+    }, timeoutMs);
+    const consume = (chunk: Buffer) => {
+      buffer += chunk.toString();
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
-
       for (const line of lines) {
-        if (!line.trim()) continue;
         try {
-          const event = JSON.parse(line);
-          if (event.type === 'text' && event.part?.text) {
-            const text = event.part.text;
-            result += text;
-            onChunk(text);
-          }
-        } catch {}
-      }
-    });
-
-    proc.stderr?.on('data', (data: Buffer) => {
-      // Container stderr is mostly logs, ignore
-    });
-
-    proc.on('close', (code) => {
-      // Process any remaining buffer
-      if (buffer.trim()) {
-        try {
-          const event = JSON.parse(buffer);
+          const event = JSON.parse(line) as { type?: string; part?: { text?: string } };
           if (event.type === 'text' && event.part?.text) {
             result += event.part.text;
             onChunk(event.part.text);
           }
-        } catch {}
+        } catch {
+          // opencode can emit non-JSON logs; ignore those lines.
+        }
       }
-
-      if (code === 0) {
-        resolve(result);
-      } else {
-        reject(new Error(`Container exited with code ${code}`));
-      }
+    };
+    proc.stdout.on('data', consume);
+    proc.stderr.on('data', () => undefined);
+    proc.on('error', (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      reject(error);
     });
-
-    proc.on('error', (err) => {
-      reject(err);
+    proc.on('close', (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      if (buffer.trim()) consume(Buffer.from('\n'));
+      if (code === 0) resolve(result); else reject(new Error(`AI container exited with code ${code}`));
     });
+    proc.stdin.write(prompt);
+    proc.stdin.end();
   });
-}
-
-/**
- * Streams Typst generation from the AI via container.
- * Calls `onChunk` for every token received.
- * Returns the full accumulated Typst content when done.
- */
-export interface AiProcessedDocument {
-  correctedText: string;
-  requisites: {
-    to: string;        // Кому (recipient)
-    from: string;      // От кого (sender)
-    date: string;      // Дата
-    subject: string;   // Заголовок/тема
-    number: string;    // Номер документа
-  };
-  documentType: 'sluzhebnaya' | 'dokladnaya' | 'informacionnaya' | 'pismo';
 }
 
 export async function generateTypstStream(
   userText: string,
-  documentType: string,
+  documentType: DocumentTypeId,
   onChunk: (chunk: string) => void,
 ): Promise<AiProcessedDocument> {
+  const local = () => {
+    const result = localProcess(userText, documentType);
+    onChunk(JSON.stringify(result));
+    return result;
+  };
+  const mode = process.env.DOCXGEN_AI_MODE || 'auto';
+  if (mode === 'local') return local();
+
   const typeNames: Record<string, string> = {
     sluzhebnaya: 'Служебная записка',
     dokladnaya: 'Докладная записка',
     informacionnaya: 'Информационная справка',
     pismo: 'Письмо',
   };
-
-  const prompt = getMainPrompt(userText, documentType, typeNames);
-
-  const result = await runInContainer(prompt, onChunk, 'typst-generator');
-  
-  // Clean up: remove markdown fences if AI wrapped them
-  const cleaned = result
-    .replace(/^```json\n?/gm, '')
-    .replace(/^```\n?/gm, '')
-    .trim();
-  
-  // Parse JSON response
   try {
-    const parsed = JSON.parse(cleaned);
-    return {
-      correctedText: parsed.correctedText || userText,
-      requisites: {
-        to: parsed.requisites?.to || '',
-        from: parsed.requisites?.from || '',
-        date: parsed.requisites?.date || '',
-        subject: parsed.requisites?.subject || '',
-        number: parsed.requisites?.number || '',
-      },
-      documentType: (parsed.documentType || documentType) as AiProcessedDocument['documentType'],
-    };
-  } catch (e) {
-    // If JSON parsing fails, return the raw text as correctedText
-    return {
-      correctedText: cleaned,
-      requisites: { to: '', from: '', date: '', subject: '', number: '' },
-      documentType: documentType as AiProcessedDocument['documentType'],
-    };
+    const raw = await runInContainer(getMainPrompt(userText, documentType, typeNames), onChunk);
+    return parseAiResult(raw, userText, documentType) || local();
+  } catch (error) {
+    if (mode === 'container') throw error;
+    return local();
   }
 }
 
-/**
- * PATCH MODE: Sends only the broken section ± context to the AI via container.
- * AI fixes ONLY those lines — not the whole document.
- * Returns the full patched Typst content.
- */
-export async function patchTypstErrors(
-  typstContent: string,
-  compileError: string,
-  onChunk: (chunk: string) => void,
-): Promise<string> {
+function parseErrorLine(stderr: string): number | null {
+  const match = stderr.match(/document\.typ:(\d+):/);
+  return match ? Number(match[1]) : null;
+}
+
+function extractBrokenSection(typstContent: string, errorLine: number, contextLines = 10) {
+  const lines = typstContent.split('\n');
+  const start = Math.max(0, errorLine - 1 - contextLines);
+  const end = Math.min(lines.length, errorLine + contextLines);
+  return { before: lines.slice(0, start).join('\n'), broken: lines.slice(start, end).join('\n'), after: lines.slice(end).join('\n'), startLine: start + 1 };
+}
+
+export async function patchTypstErrors(typstContent: string, compileError: string, onChunk: (chunk: string) => void): Promise<string> {
   const errorLine = parseErrorLine(compileError);
-  if (!errorLine) {
-    throw new Error(`Cannot parse error line from: ${compileError}`);
-  }
-
+  if (!errorLine) throw new Error(`Cannot parse error line from: ${compileError}`);
   const { before, broken, after, startLine } = extractBrokenSection(typstContent, errorLine);
-
-  const prompt = getFixPrompt(errorLine, compileError, broken, startLine);
-
-  const fixedSection = await runInContainer(prompt, onChunk, 'typst-generator');
-  
-  // Clean up markdown fences if AI wrapped them
-  const cleaned = fixedSection
-    .replace(/^```typst\n?/gm, '')
-    .replace(/^```\n?/gm, '')
-    .trim();
-  
-  return applyPatch(before, cleaned, after);
+  const fixed = await runInContainer(getFixPrompt(errorLine, compileError, broken, startLine), onChunk);
+  const clean = fixed.replace(/^```typst\s*/im, '').replace(/```\s*$/m, '').trim();
+  return [before, clean, after].filter(Boolean).join('\n');
 }

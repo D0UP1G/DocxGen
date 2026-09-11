@@ -11,7 +11,7 @@
  * — Signature block at the end
  */
 
-import { TypstTemplate, DocumentData } from './index';
+import { TypstTemplate, DocumentData, escapeTypst } from './index.js';
 
 /** Helper — returns the value or a placeholder if empty/missing. */
 function req(value: string | undefined, fallback = '[Заполнить]'): string {
@@ -20,27 +20,15 @@ function req(value: string | undefined, fallback = '[Заполнить]'): stri
 }
 
 /**
- * Escape only the minimal set of Typst special characters.
- * We do NOT escape brackets since we're not using them in the template.
- */
-function esc(text: string): string {
-  return text
-    .replace(/\\/g, '\\\\')
-    .replace(/#/g, '\\#')
-    .replace(/\*/g, '\\*')
-    .replace(/_/g, '\\_');
-}
-
-/**
  * Render the Typst source for a ГОСТ-compliant official document.
  */
 function generate(data: DocumentData): string {
   const { requisites, body } = data;
-  const toField = req(requisites.to);
-  const fromField = req(requisites.from);
-  const dateField = req(requisites.date);
-  const numberField = req(requisites.number);
-  const subjectField = req(requisites.subject);
+  const toField = escapeTypst(req(requisites.to));
+  const fromField = escapeTypst(req(requisites.from));
+  const dateField = escapeTypst(req(requisites.date));
+  const numberField = escapeTypst(req(requisites.number));
+  const subjectField = escapeTypst(req(requisites.subject));
 
   // Clean body: remove carriage returns, normalize line breaks
   const cleanBody = body
@@ -86,7 +74,7 @@ function generate(data: DocumentData): string {
 ]
 
 // Body text — directly inserted, no brackets
-${cleanBody}
+${escapeTypst(cleanBody)}
 
 // Signature block
 #block(width: 100%, inset: (top: 24pt))[

@@ -1,273 +1,144 @@
-# DocxGen — Генератор деловых документов
+# DocxGen — документ за 3 шага
 
-> AI-powered pipeline: вводите текст → получаете .docx по ГОСТ Р 6.30-2003
+DocxGen превращает черновик на русском языке в редактируемый DOCX. Пользователь вставляет текст, выбирает тип документа и оформление, проверяет обработанный текст и скачивает файл.
 
----
+Поддерживаются четыре типа:
 
-## 🎯 Что это
+- служебная записка;
+- докладная записка;
+- информационная справка;
+- письмо.
 
-Сервис для автоматической генерации служебных документов на русском языке. Пользователь вводит «сырой» текст, AI исправляет ошибки, форматирует по ГОСТ, и на выходе получается готовый .docx файл.
+Есть два программных оформления, соответствующих стартовым правилам:
 
-**Поддерживаемые типы документов:**
-- Служебная записка
-- Докладная записка
-- Информационная справка
-- Письмо
+- `official` — классический корпоративный стиль: Times New Roman 14 pt, поля 3/1,5/2/2 см, верхний колонтитул и номер страницы;
+- `standard` — современный регламентный стиль: Arial 12 pt, поля 2,5/2/1,5/1,5 см, табличная шапка и нижний колонтитул.
 
-**Два шаблона:**
-- **Официальный** — строго по ГОСТ Р 6.30-2003 (Times New Roman 14pt, поля 3cm/1.5cm)
-- **Стандартный** — упрощённый стиль для внутренних документов (Libertinus Serif 12pt)
+## Архитектура
 
----
-
-## 🏗 Архитектура
-
-```
-┌─────────────┐    ┌──────────────┐    ┌──────────────┐
-│   Frontend   │───▶│   Backend    │───▶│   Podman     │
-│  React+Vite  │    │   Express    │    │  opencode    │
-│  :5173       │    │   :3001      │    │  (AI model)  │
-└─────────────┘    └──────────────┘    └──────────────┘
-                         │
-                         ▼
-                   ┌──────────────┐
-                   │   Pipeline   │
-                   │  Typst→PDF   │
-                   │  Pandoc→DOCX │
-                   └──────────────┘
+```text
+Веб-приложение (React/Vite)
+              │
+              ▼
+Общий backend документов (HTTP API)
+              │
+              ├── обработка текста с AI
+              ├── проверка реквизитов
+              ├── генератор DOCX
+              └── черновики, задания и файлы
 ```
 
-**Поток данных:**
-1. Пользователь вводит текст + выбирает тип + шаблон
-2. Backend отправляет текст в Podman контейнер (opencode CLI)
-3. AI возвращает JSON: `{ correctedText, requisites, documentType }`
-4. Backend применяет шаблон (Typst) → компилирует в PDF
-5. Pandoc конвертирует PDF → .docx
-6. Файл возвращается пользователю через SSE
+В этом репозитории находится только веб-приложение и общий backend документов:
 
----
+- `services/ai.service.ts` — AI через opencode/Podman или детерминированный локальный fallback;
+- `services/validation.service.ts` — обязательные реквизиты по стартовому перечню;
+- `services/docx.service.ts` — создание обычного редактируемого DOCX без PDF и изображений;
+- `services/document-generation.service.ts` — общий сценарий обработки и генерации;
+- `routes/document.ts` — HTTP API веб-приложения.
 
-## 📁 Структура проекта
+## Запуск без внешнего AI
 
-```
-DocxGen/
-├── packages/
-│   ├── backend/
-│   │   └── src/
-│   │       ├── index.ts                    # Express сервер (порт 3001)
-│   │       ├── document-types.ts           # Типы документов, интерфейс Requisites
-│   │       ├── prompts/
-│   │       │   ├── document-prompts.ts     # SSOT для AI промптов
-│   │       │   └── examples/               # Few-shot примеры для AI
-│   │       ├── routes/
-│   │       │   └── document.ts             # POST /api/generate (SSE)
-│   │       ├── services/
-│   │       │   ├── ai.service.ts           # Запуск opencode в Podman
-│   │       │   ├── validation.service.ts   # Валидация реквизитов
-│   │       │   ├── typst.service.ts        # Компиляция Typst
-│   │       │   └── pandoc.service.ts       # Конвертация в DOCX
-│   │       └── templates/
-│   │           ├── index.ts                # Интерфейс + реестр шаблонов
-│   │           ├── official.ts             # ГОСТ шаблон
-│   │           └── standard.ts             # Стандартный шаблон
-│   └── frontend/
-│       └── src/
-│           └── components/
-│               └── DocumentGenerator.tsx    # Основной UI компонент
-├── Containerfile                           # Определение контейнера
-├── opencode.json                           # Конфигурация opencode
-├── .opencode/
-│   └── agents/
-│       └── typst-generator.md              # Определение AI агента
-├── spec/                                   # Примеры документов
-│   ├── Примеры/                            # Текстовые примеры
-│   └── Папка/                              # .docx примеры (эталон)
-├── test_inputs/                            # Тестовые входные данные
-└── PLAN.md                                 # План реализации
-```
-
----
-
-## 🚀 Запуск
-
-### Предварительные требования
-
-- **Node.js** ≥ 18
-- **pnpm** ≥ 9
-- **Podman** (или Docker)
-- **Typst** (`cargo install typst-cli`)
-- **Pandoc** (`apt install pandoc` или `brew install pandoc`)
-
-### 1. Сборка контейнера
-
-```bash
-podman build -t localhost/docxgen-opencode:latest .
-```
-
-### 2. Установка зависимостей
+Для локальной демонстрации не нужны Podman, Typst, Pandoc и ключи внешних API. Локальный режим исправляет распространённые ошибки, извлекает подписанные реквизиты и сохраняет исходные факты.
 
 ```bash
 pnpm install
-```
 
-### 3. Запуск
-
-```bash
+# PowerShell
+$env:DOCXGEN_AI_MODE="local"
 pnpm dev
 ```
 
-- **Frontend:** http://localhost:5173
-- **Backend:** http://localhost:3001
+Откройте [http://localhost:5173](http://localhost:5173). Общий backend документов работает на `http://localhost:3001`.
 
-### 4. Тестирование
-
-Используйте входные данные из `test_inputs/`:
+Если в окружении включена политика свежести пакетов pnpm, можно установить зависимости отдельно:
 
 ```bash
-# Пример входных данных
-cat test_inputs/input1_official_letter.txt
+npm install --prefix packages/backend --ignore-scripts --no-audit --no-fund --package-lock=false
+npm install --prefix packages/frontend --ignore-scripts --no-audit --no-fund --package-lock=false
 ```
 
-Откройте http://localhost:5173, вставьте текст, выберите тип и шаблон.
+## Режим AI через контейнер
 
----
+```bash
+podman build -t docxgen-opencode -f Containerfile .
 
-## 🔧 Ключевые компоненты
-
-### AI Сервис (`ai.service.ts`)
-
-Запускает `opencode` CLI внутри Podman контейнера:
-
-```typescript
-const proc = spawn('podman', [
-  'run', '--rm', '-i',
-  '--network=host',
-  'localhost/docxgen-opencode:latest',
-  'opencode', '--model', 'opencode/big-pickle', '--agent', 'typst-generator'
-]);
+# PowerShell
+$env:DOCXGEN_AI_MODE="container"
+$env:CONTAINER_RUNTIME="podman"
+$env:DOCXGEN_AI_IMAGE="docxgen-opencode"
+pnpm dev
 ```
 
-Промпт передаётся через stdin. AI возвращает JSON с исправленным текстом и реквизитами.
+В режиме `auto` backend пытается использовать контейнер, а при недоступности AI переходит на локальную обработку. В режиме `container` ошибка AI возвращается пользователю и не маскируется fallback-ом.
 
-### Шаблоны (`templates/`)
+## API
 
-Каждый шаблон — объект с методом `generate(data)`:
+### `POST /api/process`
 
-```typescript
-interface TypstTemplate {
-  id: string;
-  name: string;
-  description: string;
-  generate: (data: DocumentData) => string;
+Обрабатывает черновик и возвращает исправленный текст, реквизиты и список пропусков.
+
+```json
+{
+  "text": "Кому: Иванову И.И.\nДата: 12.09.2026\n...",
+  "documentType": "sluzhebnaya"
 }
 ```
 
-Шаблон генерирует Typst исходный код, который компилируется в PDF.
+### `POST /api/generate`
 
-### Валидация (`validation.service.ts`)
+Формирует DOCX. Можно передать результат `/api/process` после ручного редактирования:
 
-Проверяет обязательные поля для каждого типа документа:
-
-```typescript
-const requiredFields: Record<string, (keyof Requisites)[]> = {
-  sluzhebnaya: ['to', 'from', 'date', 'subject'],
-  dokladnaya: ['to', 'from', 'date', 'subject'],
-  informatssionnaya: ['to', 'from', 'date', 'subject'],
-  pisimo: ['to', 'from', 'date', 'subject'],
-};
+```json
+{
+  "text": "исходный черновик",
+  "correctedText": "исправленный текст",
+  "requisites": {
+    "to": "Иванову И.И.",
+    "from": "Петров П.П.",
+    "position": "Начальник отдела",
+    "date": "12.09.2026",
+    "number": "1-СЗ",
+    "subject": "О выполнении плана",
+    "signature": "Петров П.П."
+  },
+  "documentType": "sluzhebnaya",
+  "templateId": "official"
+}
 ```
 
-Отсутствующие поля помечаются `[Заполнить]` в Typst и показываются жёлтым в UI.
+Ответ — SSE. Событие `done` содержит base64 DOCX, `validation` — предупреждения и пропущенные реквизиты, `error` — понятное сообщение об ошибке.
 
----
+### Служебные endpoints
 
-## 📝 Промпты (SSOT)
+- `GET /health` — состояние backend документов.
 
-Все промпты для AI живут в `packages/backend/src/prompts/document-prompts.ts`:
+## Реквизиты
 
-- `getMainPrompt()` — основной промпт для анализа текста
-- `getFixPrompt()` — промпт для исправления ошибок Typst
+Правила синхронизированы со стартовым документом `ПЕРЕЧЕНЬ ОБЯЗАТЕЛЬНЫХ РЕКВИЗИТОВ ДЛЯ ТИПОВ ДОКУМЕНТОВ.docx`:
 
-**Важно:** `correctedText` должен быть ЧИСТЫМ текстом (plain text), не Typst разметкой.
+- служебная и докладная записки: адресат, автор, должность, дата, номер, заголовок, подпись и текст;
+- информационная справка: составитель, дата, заголовок, подпись и текст; адресат не обязателен;
+- письмо: адресат, отправитель, должность, дата, номер, тема, подпись и текст.
 
----
+Если значение отсутствует, в DOCX остаётся явный placeholder (`[Адресат]`, `[Дата]` и т.п.). В веб-интерфейсе его можно заполнить перед скачиванием.
 
-## 🐛 Известные проблемы
+## Стартовые материалы и тесты
 
-1. **AI генерирует Typst разметку** — исправлено добавлением few-shot примеров
-2. **Скобки `[` `]` в выводе** — исправлено удалением `escapeTypst`
-3. **Пустой correctedText** — иногда AI возвращает пустой текст, cần retry
+- `test_inputs/` — пять черновиков для обязательных сценариев;
+- `spec/` — текстовые и DOCX-примеры;
+- `Красноярск для участников .zip` — исходный пакет организаторов: 16 черновиков, эталонные документы, перечень реквизитов и два описания шаблонов.
 
----
-
-## 🧪 Тестирование
-
-### Тестовые входные данные
-
-| Файл | Тип | Описание |
-|------|-----|----------|
-| `input1_official_letter.txt` | Письмо | Все поля заполнены |
-| `input2_sluzhebnaya.txt` | Служебная записка | Часть полей отсутствует |
-| `input3_dokladnaya.txt` | Докладная записка | Все поля заполнены |
-| `input4_informatsionnaya.txt` | Информационная справка | Все поля заполнены |
-| `input5_dirty_draft.txt` | Любой | «Грязный» черновик с ошибками |
-
-### Проверка pipeline
+Запуск проверок:
 
 ```bash
-# 1. Запустите сервер
-pnpm dev
-
-# 2. Откройте http://localhost:5173
-
-# 3. Вставьте текст из test_inputs/
-
-# 4. Выберите тип и шаблон
-
-# 5. Нажмите «Сгенерировать»
-
-# 6. Проверьте .docx файл
-```
-
----
-
-## 📦 Деплой
-
-### Контейнер
-
-```bash
-# Сборка
-podman build -t localhost/docxgen-opencode:latest .
-
-# Проверка
-podman run --rm localhost/docxgen-opencode:latest opencode --help
-```
-
-### Backend
-
-```bash
+pnpm typecheck
 pnpm build
-node packages/backend/dist/index.js
+pnpm test
 ```
 
-### Frontend
+Backend-тесты проверяют схему реквизитов, локальную обработку фактов и корректность DOCX-архива. Результат — обычный OOXML-документ, а не PDF или изображение.
 
-```bash
-cd packages/frontend
-pnpm build
-# Статические файлы в dist/
-```
+## Ограничения
 
----
-
-## 🔗 Ссылки
-
-- **GitHub:** https://github.com/SomeSuperCoder/DocxGen
-- **Hackathon:** Первенство России 2026 — Продуктовое программирование
-- **Задача:** «Документ за 3 шага»
-
----
-
-## 📄 Лицензия
-
-MIT
+- локальный fallback исправляет распространённые ошибки и не заменяет полноценную языковую модель;
+- для production нужны ограничение доступа, постоянное хранилище и очередь длительных задач;

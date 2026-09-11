@@ -1,95 +1,58 @@
-/**
- * Validation service for document requisites.
- *
- * Checks that all required fields for a given document type are present
- * and non-empty before document generation.
- */
-
 import {
+  DOCUMENT_TYPES,
   type DocumentType,
   type DocumentTypeId,
+  type RequisiteKey,
   type Requisites,
-  DOCUMENT_TYPES,
-} from "../document-types";
+} from '../document-types.js';
 
-/** Result of a requisites validation check. */
 export interface ValidationResult {
-  /** `true` if all required fields are present and non-empty. */
   isValid: boolean;
-  /** List of required field keys that are missing or empty. */
-  missingFields: (keyof Requisites)[];
-  /** Human-readable warnings (e.g. format hints). */
+  missingFields: RequisiteKey[];
   warnings: string[];
 }
 
-/** Russian labels for requisites fields — used in user-facing messages. */
-const FIELD_LABELS: Record<keyof Requisites, string> = {
-  to: "Кому",
-  from: "От кого",
-  date: "Дата",
-  subject: "Тема",
-  number: "Номер",
+const COMMON_LABELS: Record<RequisiteKey, string> = {
+  to: 'Адресат',
+  from: 'Автор / отправитель',
+  date: 'Дата',
+  subject: 'Заголовок / тема',
+  number: 'Номер',
+  position: 'Должность',
+  signature: 'Подпись',
+  greeting: 'Обращение',
+  executor: 'Исполнитель',
 };
 
-/**
- * Get the Russian display label for a requisites field.
- *
- * @param field - The Requisites key to look up.
- * @returns The Russian label (e.g. "Кому", "От кого").
- */
-export function getFieldLabel(field: keyof Requisites): string {
-  return FIELD_LABELS[field] ?? field;
+export function getFieldLabel(field: RequisiteKey, documentType?: DocumentTypeId | DocumentType): string {
+  const typeId = typeof documentType === 'string' ? documentType : documentType?.id;
+  if (typeId === 'informacionnaya' && field === 'from') return 'Составитель';
+  if (typeId === 'pismo' && field === 'from') return 'Отправитель';
+  if (field === 'subject') return typeId === 'pismo' ? 'Тема' : 'Заголовок';
+  return COMMON_LABELS[field];
 }
 
-/**
- * Validate that all required fields for the given document type are present
- * and non-empty in the provided requisites.
- *
- * @param requisites - The requisites to validate.
- * @param documentType - The document type ID or full DocumentType object.
- * @returns A ValidationResult with isValid, missingFields, and warnings.
- */
 export function validateRequisites(
   requisites: Partial<Requisites>,
   documentType: DocumentTypeId | DocumentType,
+  body = '',
 ): ValidationResult {
-  const typeDef: DocumentType =
-    typeof documentType === "string"
-      ? DOCUMENT_TYPES[documentType]
-      : documentType;
-
+  const typeDef = typeof documentType === 'string' ? DOCUMENT_TYPES[documentType] : documentType;
   if (!typeDef) {
-    return {
-      isValid: false,
-      missingFields: [],
-      warnings: [`Неизвестный тип документа: ${documentType}`],
-    };
+    return { isValid: false, missingFields: [], warnings: [`Неизвестный тип документа: ${documentType}`] };
   }
 
-  const missingFields: (keyof Requisites)[] = [];
-  const warnings: string[] = [];
-
+  const missingFields: RequisiteKey[] = [];
   for (const field of typeDef.requiredFields) {
     const value = requisites[field];
-    if (!value || (typeof value === "string" && value.trim() === "")) {
-      missingFields.push(field);
-    }
+    if (!value || value.trim() === '') missingFields.push(field);
   }
 
-  // Format warning for date field if present and non-empty
-  if (
-    requisites.date &&
-    !/^\d{2}\.\d{2}\.\d{4}$/.test(requisites.date) &&
-    !/^\d{4}-\d{2}-\d{2}$/.test(requisites.date)
-  ) {
-    warnings.push(
-      `Поле "Дата" рекомендуется записывать в формате ДД.ММ.ГГГГ или ГГГГ-ММ-ДД`,
-    );
+  const warnings: string[] = [];
+  if (!body.trim()) warnings.push('Основной текст документа пустой');
+  if (requisites.date && !/^\d{2}\.\d{2}\.\d{4}$/.test(requisites.date) && !/^\d{4}-\d{2}-\d{2}$/.test(requisites.date)) {
+    warnings.push('Поле «Дата» рекомендуется записывать в формате ДД.ММ.ГГГГ или ГГГГ-ММ-ДД');
   }
 
-  return {
-    isValid: missingFields.length === 0,
-    missingFields,
-    warnings,
-  };
+  return { isValid: missingFields.length === 0 && body.trim().length > 0, missingFields, warnings };
 }
