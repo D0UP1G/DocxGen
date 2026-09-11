@@ -1,15 +1,18 @@
 {
-  "name": "doc3steps",
-  "type": "module",
-  "engines": {
-    "node": ">=24"
-  },
+  "name": "docxgen",
+  "version": "0.1.0",
+  "private": true,
   "scripts": {
-    "dev": "node --env-file-if-exists=.env --watch src/server.js",
+    "dev": "concurrently --names backend,frontend --prefix-colors blue,green \"node --env-file-if-exists=.env --watch src/server.js\" \"pnpm --filter @docxgen/frontend dev\"",
+    "dev:frontend": "pnpm --filter @docxgen/frontend dev",
+    "dev:backend": "node --env-file-if-exists=.env --watch src/server.js",
+    "dev:legacy": "pnpm --filter @docxgen/backend dev",
     "start": "node src/server.js",
     "test": "vitest run",
     "eval": "node --env-file-if-exists=.env scripts/eval.js",
-    "demo": "node --env-file-if-exists=.env scripts/make-demo.js"
+    "demo": "node --env-file-if-exists=.env scripts/make-demo.js",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck"
   },
   "dependencies": {
     "better-sqlite3": "^12",
@@ -21,11 +24,15 @@
     "zod": "^4"
   },
   "devDependencies": {
+    "concurrently": "^10.0.5",
     "jszip": "^3",
     "supertest": "^7",
     "vitest": "^3"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["better-sqlite3", "esbuild"]
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "esbuild"
+    ]
   }
 }
