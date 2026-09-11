@@ -1,144 +1,146 @@
-# DocxGen — документ за 3 шага
+# DocxGen — Документ за 3 шага
 
-DocxGen превращает черновик на русском языке в редактируемый DOCX. Пользователь вставляет текст, выбирает тип документа и оформление, проверяет обработанный текст и скачивает файл.
+AI-powered backend that turns Russian text drafts into formatted DOCX documents.
 
-Поддерживаются четыре типа:
+## What It Does
 
-- служебная записка;
-- докладная записка;
-- информационная справка;
-- письмо.
+DocxGen takes a rough draft in Russian and transforms it into a properly formatted, editable DOCX file. The AI handles spelling, grammar, and style corrections while extracting key document requisites (addressee, author, date, etc.).
 
-Есть два программных оформления, соответствующих стартовым правилам:
+**Workflow:**
+1. User sends a draft (plain text)
+2. AI corrects spelling, grammar, and style
+3. AI extracts document requisites (addressee, author, etc.)
+4. System validates extracted data against the original draft
+5. DOCX is generated from a configurable template
+6. User downloads the final document
 
-- `official` — классический корпоративный стиль: Times New Roman 14 pt, поля 3/1,5/2/2 см, верхний колонтитул и номер страницы;
-- `standard` — современный регламентный стиль: Arial 12 pt, поля 2,5/2/1,5/1,5 см, табличная шапка и нижний колонтитул.
+**Supported clients:** Web, MAX-bot, VK-bot
 
-## Архитектура
+## Quick Start
 
-```text
-Веб-приложение (React/Vite)
-              │
-              ▼
-Общий backend документов (HTTP API)
-              │
-              ├── обработка текста с AI
-              ├── проверка реквизитов
-              ├── генератор DOCX
-              └── черновики, задания и файлы
-```
+### Prerequisites
 
-В этом репозитории находится только веб-приложение и общий backend документов:
+- Node.js 24+
+- pnpm
+- (Optional) Ollama for local AI processing
 
-- `services/ai.service.ts` — AI через opencode/Podman или детерминированный локальный fallback;
-- `services/validation.service.ts` — обязательные реквизиты по стартовому перечню;
-- `services/docx.service.ts` — создание обычного редактируемого DOCX без PDF и изображений;
-- `services/document-generation.service.ts` — общий сценарий обработки и генерации;
-- `routes/document.ts` — HTTP API веб-приложения.
-
-## Запуск без внешнего AI
-
-Для локальной демонстрации не нужны Podman и ключи внешних API. Локальный режим исправляет распространённые ошибки, извлекает подписанные реквизиты и сохраняет исходные факты.
+### Run Locally
 
 ```bash
 pnpm install
-
-# PowerShell
-$env:DOCXGEN_AI_MODE="local"
+cp .env.example .env
 pnpm dev
 ```
 
-Откройте [http://localhost:5173](http://localhost:5173). Общий backend документов работает на `http://localhost:3001`.
+Server starts at http://localhost:3000
 
-Если в окружении включена политика свежести пакетов pnpm, можно установить зависимости отдельно:
-
-```bash
-npm install --prefix packages/backend --ignore-scripts --no-audit --no-fund --package-lock=false
-npm install --prefix packages/frontend --ignore-scripts --no-audit --no-fund --package-lock=false
-```
-
-## Режим AI через контейнер
+### Run with Docker (Optional)
 
 ```bash
-podman build -t docxgen-opencode -f Containerfile .
-
-# PowerShell
-$env:DOCXGEN_AI_MODE="container"
-$env:CONTAINER_RUNTIME="podman"
-$env:DOCXGEN_AI_IMAGE="docxgen-opencode"
-pnpm dev
+docker compose up
 ```
 
-В режиме `auto` backend пытается использовать контейнер, а при недоступности AI переходит на локальную обработку. В режиме `container` ошибка AI возвращается пользователю и не маскируется fallback-ом.
+## Architecture
+
+```mermaid
+flowchart LR
+    U[Client] -->|REST API| A[Express Server]
+    A --> D[DocumentService]
+    D --> Q[Job Queue]
+    Q --> W[Worker]
+    W --> AI[AI Processing]
+    AI --> V[Validation]
+    V --> R[Requisites Merge]
+    R --> X[DOCX Generator]
+    X --> FS[(File Storage)]
+    D --> DB[(SQLite)]
+```
+
+**Key components:**
+- **Express Server** — REST API + bot adapters
+- **DocumentService** — Single point of entry for all operations
+- **Job Queue** — SQLite-backed, idempotent processing
+- **AI Module** — OpenAI-compatible provider (Ollama, vLLM, etc.)
+- **Validation** — Grounding checks + fact comparison
+- **DOCX Generator** — Programmatic document creation using `docx` library
+- **File Storage** — Local filesystem with caching
 
 ## API
 
-### `POST /api/process`
+Brief overview. For full reference, see [docs/api.md](docs/api.md).
 
-Обрабатывает черновик и возвращает исправленный текст, реквизиты и список пропусков.
+### Core Endpoints
 
-```json
-{
-  "text": "Кому: Иванову И.И.\nДата: 12.09.2026\n...",
-  "documentType": "sluzhebnaya"
-}
-```
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | /api/documents | Create a document |
+| POST | /api/documents/:id/process | Run AI processing |
+| POST | /api/documents/:id/render | Generate DOCX |
+| GET | /api/files/:fileId | Download the file |
+| GET | /api/documents/:id | Get document status |
+| PUT | /api/documents/:id/fields | Set field values |
 
-### `POST /api/generate`
+### Full API Reference
 
-Формирует DOCX. Можно передать результат `/api/process` после ручного редактирования:
+→ [docs/api.md](docs/api.md)
 
-```json
-{
-  "text": "исходный черновик",
-  "correctedText": "исправленный текст",
-  "requisites": {
-    "to": "Иванову И.И.",
-    "from": "Петров П.П.",
-    "position": "Начальник отдела",
-    "date": "12.09.2026",
-    "number": "1-СЗ",
-    "subject": "О выполнении плана",
-    "signature": "Петров П.П."
-  },
-  "documentType": "sluzhebnaya",
-  "templateId": "official"
-}
-```
+## Integration Examples
 
-Ответ — SSE. Событие `done` содержит base64 DOCX, `validation` — предупреждения и пропущенные реквизиты, `error` — понятное сообщение об ошибке.
+For practical integration examples (curl, JavaScript, Python), see:
 
-### Служебные endpoints
+→ [docs/integration-guide.md](docs/integration-guide.md)
 
-- `GET /health` — состояние backend документов.
+## Configuration
 
-## Реквизиты
+Key environment variables:
 
-Правила синхронизированы со стартовым документом `ПЕРЕЧЕНЬ ОБЯЗАТЕЛЬНЫХ РЕКВИЗИТОВ ДЛЯ ТИПОВ ДОКУМЕНТОВ.docx`:
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PORT` | Server port | 3000 |
+| `DATA_DIR` | Data storage directory | ./data |
+| `AI_PROVIDER` | AI provider type | openai-compat |
+| `AI_BASE_URL` | AI API endpoint | http://localhost:11434/v1 |
+| `AI_MODEL` | AI model name | qwen2.5:7b-instruct |
+| `AI_TEMPERATURE` | AI temperature | 0.1 |
+| `AI_TIMEOUT_MS` | AI request timeout | 90000 |
+| `AI_FAULT` | Simulate AI failures | off |
+| `MAX_ENABLED` | Enable MAX bot | 0 |
+| `VK_ENABLED` | Enable VK bot | 0 |
+| `CLEANUP_ENABLED` | Enable automatic cleanup | 1 |
 
-- служебная и докладная записки: адресат, автор, должность, дата, номер, заголовок, подпись и текст;
-- информационная справка: составитель, дата, заголовок, подпись и текст; адресат не обязателен;
-- письмо: адресат, отправитель, должность, дата, номер, тема, подпись и текст.
+Full list: see [.env.example](.env.example)
 
-Если значение отсутствует, в DOCX остаётся явный placeholder (`[Адресат]`, `[Дата]` и т.п.). В веб-интерфейсе его можно заполнить перед скачиванием.
+## Document Types
 
-## Стартовые материалы и тесты
+| Type | Description |
+|------|-------------|
+| memo | Служебная записка (internal memo) |
+| report | Докладная записка (report memo) |
+| reference | Информационная справка (informational reference) |
+| letter | Письмо (letter) |
 
-- `test_inputs/` — пять черновиков для обязательных сценариев;
-- `spec/` — текстовые и DOCX-примеры;
-- `Красноярск для участников .zip` — исходный пакет организаторов: 16 черновиков, эталонные документы, перечень реквизитов и два описания шаблонов.
+## Templates
 
-Запуск проверок:
+| Template | Style |
+|----------|-------|
+| classic | Times New Roman 14pt, traditional corporate layout |
+| modern | Arial 12pt, contemporary regulatory layout |
+
+## Development
 
 ```bash
-pnpm typecheck
-pnpm build
-pnpm test
+pnpm test          # Run tests
+pnpm run eval      # Evaluate AI quality
+pnpm typecheck     # Type checking
+pnpm build         # Build project
 ```
 
-Backend-тесты проверяют схему реквизитов, локальную обработку фактов и корректность DOCX-архива. Результат — обычный OOXML-документ, а не PDF или изображение.
+## Documentation
 
-## Ограничения
+- [API Reference](docs/api.md) — Full REST API documentation
+- [Integration Guide](docs/integration-guide.md) — Practical examples for web, bot, and third-party integrations
+- [Architecture](plan-backend.md) — Detailed backend architecture and design decisions
 
-- локальный fallback исправляет распространённые ошибки и не заменяет полноценную языковую модель;
-- для production нужны ограничение доступа, постоянное хранилище и очередь длительных задач;
+## License
+
+[Your License]
