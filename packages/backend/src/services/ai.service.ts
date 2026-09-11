@@ -1,21 +1,10 @@
+import { spawn, ChildProcess } from 'child_process';
 import * as crypto from 'crypto';
-import { SYSTEM_PROMPT, FIX_PROMPT } from '../prompts.js';
 
-const OPENCODE_API_URL = 'https://opencode.ai/zen/v1/chat/completions';
+const CONTAINER_IMAGE = 'docxgen-opencode';
 
 function generateId(prefix: string): string {
   return prefix + crypto.randomBytes(12).toString('hex');
-}
-
-function getHeaders() {
-  return {
-    'Content-Type': 'application/json',
-    'Accept': 'text/event-stream',
-    'x-opencode-client': 'opencode',
-    'x-opencode-session': generateId('ses_'),
-    'x-opencode-request': generateId('req_'),
-    'User-Agent': 'opencode/1.18.15',
-  };
 }
 
 /**
@@ -61,7 +50,84 @@ function applyPatch(
 }
 
 /**
- * Streams Typst generation from the AI API.
+ * Runs opencode in a container and streams the output.
+ * Returns the full generated text.
+ */
+function runInContainer(
+  prompt: string,
+  onChunk: (chunk: string) => void,
+  agent: string = 'typst-generator',
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const sessionID = generateId('ses_');
+    
+    // Pass prompt via stdin, not as argument
+    const proc = spawn('podman', [
+      'run', '--rm', '-i',
+      '--network=host',
+      CONTAINER_IMAGE,
+      'opencode', 'run',
+      '--agent', agent,
+      '--format', 'json',
+      '--title', `docxgen-${sessionID}`,
+    ]);
+
+    // Write prompt to stdin
+    proc.stdin?.write(prompt);
+    proc.stdin?.end();
+
+    let result = '';
+    let buffer = '';
+
+    proc.stdout?.on('data', (data: Buffer) => {
+      buffer += data.toString();
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const event = JSON.parse(line);
+          if (event.type === 'text' && event.part?.text) {
+            const text = event.part.text;
+            result += text;
+            onChunk(text);
+          }
+        } catch {}
+      }
+    });
+
+    proc.stderr?.on('data', (data: Buffer) => {
+      // Container stderr is mostly logs, ignore
+    });
+
+    proc.on('close', (code) => {
+      // Process any remaining buffer
+      if (buffer.trim()) {
+        try {
+          const event = JSON.parse(buffer);
+          if (event.type === 'text' && event.part?.text) {
+            result += event.part.text;
+            onChunk(event.part.text);
+          }
+        } catch {}
+      }
+
+      if (code === 0) {
+        resolve(result);
+      } else {
+        reject(new Error(`Container exited with code ${code}`));
+      }
+    });
+
+    proc.on('error', (err) => {
+      reject(err);
+    });
+  });
+}
+
+/**
+ * Streams Typst generation from the AI via container.
  * Calls `onChunk` for every token received.
  * Returns the full accumulated Typst content when done.
  */
@@ -69,58 +135,31 @@ export async function generateTypstStream(
   userText: string,
   onChunk: (chunk: string) => void,
 ): Promise<string> {
-  const response = await fetch(OPENCODE_API_URL, {
-    method: 'POST',
-    headers: getHeaders(),
-    body: JSON.stringify({
-      model: 'big-pickle',
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: userText },
-      ],
-      temperature: 0.7,
-      stream: true,
-    }),
-  });
+  const prompt = `Generate a professional Typst document from the following Russian text content. 
 
-  if (!response.ok) {
-    throw new Error(`AI API error: ${response.status} ${response.statusText}`);
-  }
+Requirements:
+- Output ONLY valid Typst markup (no markdown fences, no explanations)
+- Use A4 paper with professional margins
+- Include visual elements: tables, colored boxes, metric cards where appropriate
+- All content must be in Russian
+- Use proper Typst syntax
 
-  const reader = response.body!.getReader();
-  const decoder = new TextDecoder();
-  let result = '';
-  let buffer = '';
+Content to format:
+${userText}`;
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-
-    for (const line of lines) {
-      if (line.startsWith('data: ')) {
-        const data = line.slice(6);
-        if (data === '[DONE]') continue;
-        try {
-          const parsed = JSON.parse(data);
-          const content = parsed.choices?.[0]?.delta?.content;
-          if (content) {
-            result += content;
-            onChunk(content);
-          }
-        } catch {}
-      }
-    }
-  }
-
-  return result;
+  const result = await runInContainer(prompt, onChunk, 'typst-generator');
+  
+  // Clean up: remove markdown fences if AI wrapped them
+  const cleaned = result
+    .replace(/^```typst\n?/gm, '')
+    .replace(/^```\n?/gm, '')
+    .trim();
+  
+  return cleaned;
 }
 
 /**
- * PATCH MODE: Sends only the broken section ± context to the AI.
+ * PATCH MODE: Sends only the broken section ± context to the AI via container.
  * AI fixes ONLY those lines — not the whole document.
  * Returns the full patched Typst content.
  */
@@ -136,70 +175,25 @@ export async function patchTypstErrors(
 
   const { before, broken, after, startLine } = extractBrokenSection(typstContent, errorLine);
 
-  const patchPrompt = `Типст-компиляция завершилась с ошибкой в строке ${errorLine}:
+  const prompt = `You are fixing a Typst compilation error. The error occurred at line ${errorLine}.
 
+Error message:
 ${compileError}
 
-Вот контекст вокруг ошибки (строки ${startLine}–${startLine + broken.split('\n').length - 1}):
-
+Context around the error (lines ${startLine}–${startLine + broken.split('\n').length - 1}):
 \`\`\`typst
 ${broken}
 \`\`\`
 
-Почини ТОЛЬКО этот фрагмент. Верни ИСПРАВЛЕННЫЙ фрагмент целиком — без комментариев, без markdown-ограждений, без пояснений. Только чистый Типст.`;
+Fix ONLY this fragment. Return ONLY the corrected Typst fragment — no comments, no markdown fences, no explanations. Just clean Typst.`;
 
-  const response = await fetch(OPENCODE_API_URL, {
-    method: 'POST',
-    headers: getHeaders(),
-    body: JSON.stringify({
-      model: 'big-pickle',
-      messages: [
-        { role: 'system', content: FIX_PROMPT },
-        { role: 'user', content: patchPrompt },
-      ],
-      temperature: 0.3,
-      stream: true,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`AI API error: ${response.status} ${response.statusText}`);
-  }
-
-  const reader = response.body!.getReader();
-  const decoder = new TextDecoder();
-  let fixedSection = '';
-  let buffer = '';
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-
-    for (const line of lines) {
-      if (line.startsWith('data: ')) {
-        const data = line.slice(6);
-        if (data === '[DONE]') continue;
-        try {
-          const parsed = JSON.parse(data);
-          const content = parsed.choices?.[0]?.delta?.content;
-          if (content) {
-            fixedSection += content;
-            onChunk(content);
-          }
-        } catch {}
-      }
-    }
-  }
-
+  const fixedSection = await runInContainer(prompt, onChunk, 'typst-generator');
+  
   // Clean up markdown fences if AI wrapped them
   const cleaned = fixedSection
     .replace(/^```typst\n?/gm, '')
     .replace(/^```\n?/gm, '')
     .trim();
-
+  
   return applyPatch(before, cleaned, after);
 }
