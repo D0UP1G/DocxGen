@@ -45,3 +45,6 @@ tmp-*
 
 # Orchestration metadata (session-scoped, wiped on session end / vector change)
 data/
+
+# Brief for GPT-6
+TODO_PROMPTS.md
