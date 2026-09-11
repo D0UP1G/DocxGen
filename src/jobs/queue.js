@@ -44,7 +44,7 @@ export function createQueue(db) {
 
   const requeue = db.prepare(`
     UPDATE jobs SET status = 'queued', attempts = attempts + 1,
-      run_after = datetime('now', '+' || ? * 5 || ' seconds'),
+      run_after = datetime('now', ?),
       updated_at = datetime('now')
     WHERE id = ?
   `);
@@ -107,7 +107,9 @@ export function createQueue(db) {
      */
     fail(jobId, error, job) {
       if (job.attempts + 1 < job.max_attempts) {
-        requeue.run(job.attempts + 1, jobId);
+        // Pre-compute modifier: +5s, +10s, +15s... based on attempt count
+        const delay = (job.attempts + 1) * 5;
+        requeue.run(`+${delay} seconds`, jobId);
         return { failed: false, requeued: true };
       }
       markFailed.run(String(error).slice(0, 500), jobId);

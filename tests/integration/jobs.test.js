@@ -82,7 +82,8 @@ describe('Job Queue', () => {
     let running = queue.dequeue(1);
     queue.fail(running[0].id, new AiUnavailableError(), running[0]);
 
-    // Requeue will put it back; dequeue again
+    // Requeued job has run_after in the future; force it ready for test
+    db.prepare("UPDATE jobs SET run_after = datetime('now') WHERE id = ?").run(running[0].id);
     running = queue.dequeue(1);
     const { failed, requeued } = queue.fail(running[0].id, new AiUnavailableError(), running[0]);
 
@@ -119,13 +120,17 @@ describe('Job Queue', () => {
       queue.enqueue({ kind: 'process', key: `doc:${i}:v1`, documentId: `doc-${i}` });
     }
 
-    // Dequeue with limit 2
+    // Dequeue with limit 2 — returns exactly 2
     const batch1 = queue.dequeue(2);
     expect(batch1).toHaveLength(2);
 
-    // Can't dequeue more — they're already running
+    // Remaining 2 are still queued — dequeue returns them
     const batch2 = queue.dequeue(2);
-    expect(batch2).toHaveLength(0);
+    expect(batch2).toHaveLength(2);
+
+    // All 4 now dequeued — nothing left
+    const batch3 = queue.dequeue(2);
+    expect(batch3).toHaveLength(0);
   });
 });
 
@@ -225,9 +230,15 @@ describe('Worker', () => {
 
     queue.enqueue({ kind: 'flaky', key: 'flaky:1', documentId: null, maxAttempts: 3 });
 
-    // Wait for both attempts
-    await new Promise(r => setTimeout(r, 200));
+    // Wait for first attempt to fail and requeue
+    await new Promise(r => setTimeout(r, 50));
+    expect(attempts).toBe(1);
 
+    // Force requeued job ready (skip backoff for test speed)
+    db.prepare("UPDATE jobs SET run_after = datetime('now') WHERE status = 'queued'").run();
+
+    // Wait for second attempt
+    await new Promise(r => setTimeout(r, 100));
     expect(attempts).toBe(2);
   });
 });
