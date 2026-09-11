@@ -1,5 +1,6 @@
 import { spawn, ChildProcess } from 'child_process';
 import * as crypto from 'crypto';
+import { getMainPrompt, getFixPrompt } from '../prompts/document-prompts';
 
 const CONTAINER_IMAGE = 'docxgen-opencode';
 
@@ -155,32 +156,7 @@ export async function generateTypstStream(
     pismo: 'Письмо',
   };
 
-  const prompt = `Ты — ИИ-ассистент для подготовки служебных документов. Проанализируй текст ниже и верни JSON.
-
-Тип документа: ${typeNames[documentType] || 'Служебная записка'}
-
-ЗАДАЧА:
-1. Исправь орфографические, пунктуационные и грамматические ошибки
-2. Приведи формулировки к официально-деловому стилю
-3. Извлеки реквизиты: Кому, От кого, Дата, Тема, Номер
-4. НЕ добавляй факты, даты, фамилии которых нет в исходном тексте
-5. Если реквизит отсутствует — поставь пустую строку ""
-
-ФОРМАТ ОТВЕТА — ТОЛЬКО JSON (без markdown, без комментариев):
-{
-  "correctedText": "Исправленный текст документа в официально-деловом стиле",
-  "requisites": {
-    "to": "Кому или пустая строка",
-    "from": "От кого или пустая строка", 
-    "date": "Дата или пустая строка",
-    "subject": "Тема/заголовок или пустая строка",
-    "number": "Номер или пустая строка"
-  },
-  "documentType": "${documentType}"
-}
-
-Исходный текст:
-${userText}`;
+  const prompt = getMainPrompt(userText, documentType, typeNames);
 
   const result = await runInContainer(prompt, onChunk, 'typst-generator');
   
@@ -231,17 +207,7 @@ export async function patchTypstErrors(
 
   const { before, broken, after, startLine } = extractBrokenSection(typstContent, errorLine);
 
-  const prompt = `You are fixing a Typst compilation error. The error occurred at line ${errorLine}.
-
-Error message:
-${compileError}
-
-Context around the error (lines ${startLine}–${startLine + broken.split('\n').length - 1}):
-\`\`\`typst
-${broken}
-\`\`\`
-
-Fix ONLY this fragment. Return ONLY the corrected Typst fragment — no comments, no markdown fences, no explanations. Just clean Typst.`;
+  const prompt = getFixPrompt(errorLine, compileError, broken, startLine);
 
   const fixedSection = await runInContainer(prompt, onChunk, 'typst-generator');
   
