@@ -1,16 +1,10 @@
 FROM node:22-slim
 
-# Install system dependencies
+# Install the small set of tools needed by the optional AI worker.
 RUN apt-get update && apt-get install -y \
     curl \
-    xz-utils \
-    pandoc \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
-
-# Install typst binary
-ARG TYPST_VERSION=0.12.0
-RUN curl -fsSL "https://github.com/typst/typst/releases/download/v${TYPST_VERSION}/typst-x86_64-unknown-linux-musl.tar.xz" \
-    | tar -xJ --strip-components=1 -C /usr/local/bin
 
 # Install opencode via official installer, then copy to /usr/local/bin
 RUN curl -fsSL https://opencode.ai/install | bash && \

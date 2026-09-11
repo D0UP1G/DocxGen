@@ -9,7 +9,7 @@
  * — Right-aligned signature
  */
 
-import { TypstTemplate, DocumentData } from './index';
+import { TypstTemplate, DocumentData, escapeTypst } from './index.js';
 
 /** Helper — returns the value or a placeholder if empty/missing. */
 function req(value: string | undefined, fallback = '[Заполнить]'): string {
@@ -18,26 +18,15 @@ function req(value: string | undefined, fallback = '[Заполнить]'): stri
 }
 
 /**
- * Escape only the minimal set of Typst special characters.
- */
-function esc(text: string): string {
-  return text
-    .replace(/\\/g, '\\\\')
-    .replace(/#/g, '\\#')
-    .replace(/\*/g, '\\*')
-    .replace(/_/g, '\\_');
-}
-
-/**
  * Render the Typst source for a simplified standard document.
  */
 function generate(data: DocumentData): string {
   const { requisites, body } = data;
-  const toField = req(requisites.to);
-  const fromField = req(requisites.from);
-  const dateField = req(requisites.date);
-  const numberField = req(requisites.number);
-  const subjectField = req(requisites.subject);
+  const toField = escapeTypst(req(requisites.to));
+  const fromField = escapeTypst(req(requisites.from));
+  const dateField = escapeTypst(req(requisites.date));
+  const numberField = escapeTypst(req(requisites.number));
+  const subjectField = escapeTypst(req(requisites.subject));
 
   // Clean body: remove carriage returns, normalize line breaks
   const cleanBody = body
@@ -78,7 +67,7 @@ function generate(data: DocumentData): string {
 #v(8pt)
 
 // Body text — directly inserted
-${cleanBody}
+${escapeTypst(cleanBody)}
 
 // Simple signature — right-aligned
 #align(right)[

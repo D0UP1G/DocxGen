@@ -6,6 +6,7 @@
     "dev": "pnpm --parallel -r dev",
     "dev:frontend": "pnpm --filter @docxgen/frontend dev",
     "dev:backend": "pnpm --filter @docxgen/backend dev",
+    "test": "pnpm --filter @docxgen/backend test",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck"
   }
