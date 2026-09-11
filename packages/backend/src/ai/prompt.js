@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SYSTEM_PROMPT_PATH = path.join(__dirname, '../../prompts/system.md');
+const SYSTEM_PROMPT_PATH = path.join(__dirname, '../../../../prompts/system.md');
 
 let cachedPrompt = null;
 

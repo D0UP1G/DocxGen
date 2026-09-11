@@ -3,30 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently --names backend,frontend --prefix-colors blue,green \"node --env-file-if-exists=.env --watch src/server.js\" \"pnpm --filter @docxgen/frontend dev\"",
+    "dev": "concurrently --names backend,frontend --prefix-colors blue,green \"pnpm --filter @docxgen/backend dev\" \"pnpm --filter @docxgen/frontend dev\"",
     "dev:frontend": "pnpm --filter @docxgen/frontend dev",
-    "dev:backend": "node --env-file-if-exists=.env --watch src/server.js",
-    "start": "node src/server.js",
-    "test": "vitest run",
-    "eval": "node --env-file-if-exists=.env scripts/eval.js",
-    "demo": "node --env-file-if-exists=.env scripts/make-demo.js",
+    "dev:backend": "pnpm --filter @docxgen/backend dev",
+    "start": "pnpm --filter @docxgen/backend start",
+    "test": "pnpm --filter @docxgen/backend test",
+    "eval": "pnpm --filter @docxgen/backend eval",
+    "demo": "pnpm --filter @docxgen/backend demo",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck"
   },
-  "dependencies": {
-    "better-sqlite3": "^12",
-    "cookie-parser": "^1",
-    "docx": "^9",
-    "express": "^5",
-    "pino": "^9",
-    "pino-http": "^10",
-    "zod": "^4"
-  },
   "devDependencies": {
-    "concurrently": "^10.0.5",
-    "jszip": "^3",
-    "supertest": "^7",
-    "vitest": "^3"
+    "concurrently": "^10.0.5"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
