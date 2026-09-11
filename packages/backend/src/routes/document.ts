@@ -5,7 +5,7 @@ import { generateTypstStream, patchTypstErrors } from '../services/ai.service';
 import { compileTypstContent, retryCompile } from '../services/typst.service';
 import { convertToDocx } from '../services/pandoc.service';
 
-const MAX_RETRIES = 3;
+const MAX_RETRIES = 10;
 
 const router = Router();
 

@@ -2,7 +2,15 @@ import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Download, Loader2, FileText, Code, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
+import { Download, Loader2, FileText, Code, ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, XCircle, RotateCcw } from 'lucide-react';
+
+interface RetryAttempt {
+  attempt: number;
+  status: 'compiling' | 'fixing' | 'success' | 'failed';
+  error?: string;
+  typstCode: string;
+  fixProgress: string;
+}
 
 export function DocumentGenerator() {
   const [text, setText] = useState('');
@@ -11,17 +19,22 @@ export function DocumentGenerator() {
   const [typstOutput, setTypstOutput] = useState('');
   const [status, setStatus] = useState('');
   const [showTypst, setShowTypst] = useState(true);
-  const [compileErrors, setCompileErrors] = useState<string[]>([]);
+  const [retryAttempts, setRetryAttempts] = useState<RetryAttempt[]>([]);
   const typstRef = useRef<HTMLPreElement>(null);
+  const timelineRef = useRef<HTMLDivElement>(null);
 
-  const handleGenerate = async () => {
-    if (!text.trim()) return;
-
+  const resetState = () => {
     setIsLoading(true);
     setError(null);
     setTypstOutput('');
     setStatus('');
-    setCompileErrors([]);
+    setRetryAttempts([]);
+  };
+
+  const handleGenerate = async () => {
+    if (!text.trim()) return;
+
+    resetState();
 
     try {
       const response = await fetch('http://localhost:3001/api/generate', {
@@ -45,7 +58,6 @@ export function DocumentGenerator() {
 
         buffer += decoder.decode(value, { stream: true });
 
-        // Process complete SSE messages (terminated by double newline)
         while (buffer.includes('\n\n')) {
           const idx = buffer.indexOf('\n\n');
           const message = buffer.slice(0, idx);
@@ -79,25 +91,80 @@ export function DocumentGenerator() {
                 break;
 
               case 'fix_chunk':
-                // AI is fixing — replace output with patched version
-                setTypstOutput((prev) => prev + data);
+                // AI is fixing — show progress
+                setRetryAttempts((prev) => {
+                  const updated = [...prev];
+                  const last = updated[updated.length - 1];
+                  if (last) {
+                    last.fixProgress += data;
+                  }
+                  return updated;
+                });
                 break;
 
               case 'status':
                 setStatus(data);
+                // Parse attempt number from status
+                const attemptMatch = data.match(/попытка (\d+)/);
+                if (attemptMatch) {
+                  const attemptNum = parseInt(attemptMatch[1], 10);
+
+                  // If this is a new attempt, add it to timeline
+                  setRetryAttempts((prev) => {
+                    const exists = prev.some((a) => a.attempt === attemptNum);
+                    if (!exists) {
+                      return [
+                        ...prev,
+                        {
+                          attempt: attemptNum,
+                          status: 'compiling',
+                          typstCode: '',
+                          fixProgress: '',
+                        },
+                      ];
+                    }
+                    return prev;
+                  });
+                }
                 break;
 
               case 'typst':
                 setTypstOutput(data);
+                // Update the current attempt's typst code
+                setRetryAttempts((prev) => {
+                  const updated = [...prev];
+                  const last = updated[updated.length - 1];
+                  if (last) {
+                    last.typstCode = data;
+                  }
+                  return updated;
+                });
                 break;
 
               case 'compile_error':
-                setCompileErrors((prev) => [...prev, data]);
-                // Clear the typst output since AI will regenerate
-                setTypstOutput('');
+                setRetryAttempts((prev) => {
+                  const updated = [...prev];
+                  const last = updated[updated.length - 1];
+                  if (last) {
+                    last.status = 'fixing';
+                    last.error = data;
+                  }
+                  return updated;
+                });
                 break;
 
               case 'done':
+                // Success — mark the last attempt as success
+                setRetryAttempts((prev) => {
+                  const updated = [...prev];
+                  const last = updated[updated.length - 1];
+                  if (last) {
+                    last.status = 'success';
+                  }
+                  return updated;
+                });
+
+                // Download the file
                 const binary = atob(data);
                 const bytes = new Uint8Array(binary.length);
                 for (let i = 0; i < binary.length; i++) {
@@ -135,6 +202,32 @@ export function DocumentGenerator() {
     }
   };
 
+  const getStatusIcon = (attemptStatus: RetryAttempt['status']) => {
+    switch (attemptStatus) {
+      case 'compiling':
+        return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />;
+      case 'fixing':
+        return <RotateCcw className="h-4 w-4 animate-spin text-amber-500" />;
+      case 'success':
+        return <CheckCircle2 className="h-4 w-4 text-green-500" />;
+      case 'failed':
+        return <XCircle className="h-4 w-4 text-red-500" />;
+    }
+  };
+
+  const getStatusLabel = (attemptStatus: RetryAttempt['status']) => {
+    switch (attemptStatus) {
+      case 'compiling':
+        return 'Компиляция...';
+      case 'fixing':
+        return 'AI исправляет...';
+      case 'success':
+        return 'Успешно';
+      case 'failed':
+        return 'Ошибка';
+    }
+  };
+
   return (
     <Card className="w-full max-w-4xl mx-auto">
       <CardHeader>
@@ -155,6 +248,7 @@ export function DocumentGenerator() {
           className="resize-none"
         />
 
+        {/* Current Status */}
         {status && (
           <div className="text-sm text-blue-600 bg-blue-50 dark:bg-blue-950 dark:text-blue-400 p-3 rounded-md flex items-center gap-2">
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -162,25 +256,70 @@ export function DocumentGenerator() {
           </div>
         )}
 
-        {compileErrors.length > 0 && (
-          <div className="space-y-2">
-            {compileErrors.map((err, i) => (
-              <div key={i} className="text-xs text-amber-700 bg-amber-50 dark:bg-amber-950 dark:text-amber-400 p-3 rounded-md flex items-start gap-2">
-                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-                <span className="break-all">
-                  Ошибка компиляции #{i + 1}: {err.slice(0, 300)}{err.length > 300 ? '...' : ''}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-
+        {/* Error */}
         {error && (
           <div className="text-sm text-red-500 bg-red-50 dark:bg-red-950 p-3 rounded-md">
             {error}
           </div>
         )}
 
+        {/* Retry Timeline */}
+        {retryAttempts.length > 0 && (
+          <div ref={timelineRef} className="border rounded-lg overflow-hidden">
+            <div className="px-4 py-2 bg-muted text-sm font-medium flex items-center gap-2">
+              <RotateCcw className="h-4 w-4" />
+              Фидбек-луп: {retryAttempts.length} попыток
+            </div>
+            <div className="divide-y">
+              {retryAttempts.map((attempt) => (
+                <div key={attempt.attempt} className="p-4 space-y-2">
+                  {/* Attempt Header */}
+                  <div className="flex items-center gap-2">
+                    {getStatusIcon(attempt.status)}
+                    <span className="font-medium text-sm">
+                      Попытка {attempt.attempt}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {getStatusLabel(attempt.status)}
+                    </span>
+                  </div>
+
+                  {/* Error Message */}
+                  {attempt.error && (
+                    <div className="text-xs text-amber-700 bg-amber-50 dark:bg-amber-950 dark:text-amber-400 p-2 rounded flex items-start gap-2">
+                      <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
+                      <span className="break-all">
+                        {attempt.error.slice(0, 200)}{attempt.error.length > 200 ? '...' : ''}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Fix Progress */}
+                  {attempt.status === 'fixing' && attempt.fixProgress && (
+                    <div className="text-xs text-muted-foreground bg-muted p-2 rounded font-mono overflow-auto max-h-24">
+                      {attempt.fixProgress}
+                    </div>
+                  )}
+
+                  {/* Typst Code (collapsible) */}
+                  {attempt.typstCode && (
+                    <details className="group">
+                      <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground flex items-center gap-1">
+                        <ChevronDown className="h-3 w-3 transition-transform group-open:rotate-180" />
+                        Typst-код (попытка {attempt.attempt})
+                      </summary>
+                      <pre className="mt-2 text-xs font-mono p-2 bg-muted/50 rounded overflow-auto max-h-32 whitespace-pre-wrap">
+                        {attempt.typstCode}
+                      </pre>
+                    </details>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Final Typst Output */}
         {typstOutput && (
           <div className="border rounded-lg overflow-hidden">
             <button
@@ -189,7 +328,7 @@ export function DocumentGenerator() {
             >
               <span className="flex items-center gap-2">
                 <Code className="h-4 w-4" />
-                Typst-разметка
+                Итоговая Typst-разметка
               </span>
               {showTypst ? (
                 <ChevronUp className="h-4 w-4" />
