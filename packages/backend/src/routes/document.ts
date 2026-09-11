@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
-import { generateTypstStream, fixTypstErrors } from '../services/ai.service';
+import { generateTypstStream, patchTypstErrors } from '../services/ai.service';
 import { compileTypstContent, retryCompile } from '../services/typst.service';
 import { convertToDocx } from '../services/pandoc.service';
 
@@ -64,7 +64,7 @@ router.post('/generate', async (req: Request, res: Response) => {
         sendEvent('compile_error', result.error!);
 
         try {
-          typstContent = await fixTypstErrors(text, typstContent, result.error!, (chunk) => {
+          typstContent = await patchTypstErrors(typstContent, result.error!, (chunk) => {
             sendEvent('fix_chunk', chunk);
           });
           console.log(`✅ Typst fixed by AI (attempt ${attempt + 1})`);
