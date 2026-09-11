@@ -1,0 +1,12 @@
+{
+  "name": "docxgen",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --parallel -r dev",
+    "dev:frontend": "pnpm --filter @docxgen/frontend dev",
+    "dev:backend": "pnpm --filter @docxgen/backend dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck"
+  }
+}
