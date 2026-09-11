@@ -6,7 +6,6 @@
     "dev": "concurrently --names backend,frontend --prefix-colors blue,green \"node --env-file-if-exists=.env --watch src/server.js\" \"pnpm --filter @docxgen/frontend dev\"",
     "dev:frontend": "pnpm --filter @docxgen/frontend dev",
     "dev:backend": "node --env-file-if-exists=.env --watch src/server.js",
-    "dev:legacy": "pnpm --filter @docxgen/backend dev",
     "start": "node src/server.js",
     "test": "vitest run",
     "eval": "node --env-file-if-exists=.env scripts/eval.js",
