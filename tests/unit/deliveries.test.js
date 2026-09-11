@@ -85,7 +85,7 @@ describe('deliverFile', () => {
       expect(delivery).toBeDefined();
       expect(delivery.status).toBe('sent');
       expect(delivery.attachment).toBe('attachment-token-123');
-      expect(delivery.attempts).toBe(1);
+      expect(delivery.attempts).toBe(2); // 1 for upload + 1 for send
     });
   });
 
@@ -223,7 +223,7 @@ describe('deliverFile', () => {
       // Verify attempts counter
       const delivery = db.prepare('SELECT * FROM deliveries WHERE idem_key = ?')
         .get(`max:peer-5:${testFileId}:event-5`);
-      expect(delivery.attempts).toBe(2);
+      expect(delivery.attempts).toBe(3); // 2 from first call (upload + send fail) + 1 from second call (send success)
     });
   });
 

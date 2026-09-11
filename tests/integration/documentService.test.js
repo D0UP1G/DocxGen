@@ -94,6 +94,16 @@ describe('DocumentService', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
+  beforeEach(() => {
+    // Clean tables between tests to prevent data accumulation
+    db.exec('DELETE FROM deliveries');
+    db.exec('DELETE FROM files');
+    db.exec('DELETE FROM versions');
+    db.exec('DELETE FROM documents');
+    db.exec('DELETE FROM jobs');
+    db.exec('DELETE FROM processing_log');
+  });
+
   // ── Create ──────────────────────────────────────────────────────────────────
 
   describe('create', () => {
@@ -359,8 +369,8 @@ describe('DocumentService', () => {
       docId = service.create(owner).id;
     });
 
-    it('throws NOT_READY when no version', () => {
-      expect(() => service.render(owner, docId)).rejects.toThrow('No processed version available');
+    it('throws NOT_READY when no version', async () => {
+      await expect(service.render(owner, docId)).rejects.toThrow('No processed version available');
     });
 
     it('throws NOT_READY when version is stale', async () => {
@@ -380,7 +390,7 @@ describe('DocumentService', () => {
       // Increment draft (makes version stale)
       service.setDraft(owner, docId, 'more text');
 
-      expect(() => service.render(owner, docId)).rejects.toThrow('Version is stale');
+      await expect(service.render(owner, docId)).rejects.toThrow('Version is stale');
     });
   });
 
@@ -494,34 +504,35 @@ describe('DocumentService', () => {
   // ── Foreign Owner ───────────────────────────────────────────────────────────
 
   describe('foreign owner protection', () => {
-    it('setDraft throws FORBIDDEN', () => {
+    it('setDraft throws NOT_FOUND for wrong owner', () => {
       const doc = service.create(owner);
-      expect(() => service.setDraft(otherOwner, doc.id, 'text')).toThrow('Access denied');
+      // Query with wrong owner returns null → NOT_FOUND
+      expect(() => service.setDraft(otherOwner, doc.id, 'text')).toThrow('Document not found');
     });
 
-    it('setType throws FORBIDDEN', () => {
+    it('setType throws NOT_FOUND for wrong owner', () => {
       const doc = service.create(owner);
-      expect(() => service.setType(otherOwner, doc.id, 'memo')).toThrow('Access denied');
+      expect(() => service.setType(otherOwner, doc.id, 'memo')).toThrow('Document not found');
     });
 
-    it('setTemplate throws FORBIDDEN', () => {
+    it('setTemplate throws NOT_FOUND for wrong owner', () => {
       const doc = service.create(owner);
-      expect(() => service.setTemplate(otherOwner, doc.id, 'classic')).toThrow('Access denied');
+      expect(() => service.setTemplate(otherOwner, doc.id, 'classic')).toThrow('Document not found');
     });
 
-    it('startProcessing throws FORBIDDEN', () => {
+    it('startProcessing throws NOT_FOUND for wrong owner', () => {
       const doc = service.create(owner);
-      expect(() => service.startProcessing(otherOwner, doc.id)).toThrow('Access denied');
+      expect(() => service.startProcessing(otherOwner, doc.id)).toThrow('Document not found');
     });
 
-    it('setField throws FORBIDDEN', () => {
+    it('setField throws NOT_FOUND for wrong owner', () => {
       const doc = service.create(owner);
-      expect(() => service.setField(otherOwner, doc.id, 'key', 'value')).toThrow('Access denied');
+      expect(() => service.setField(otherOwner, doc.id, 'key', 'value')).toThrow('Document not found');
     });
 
-    it('setManualText throws FORBIDDEN', () => {
+    it('setManualText throws NOT_FOUND for wrong owner', () => {
       const doc = service.create(owner);
-      expect(() => service.setManualText(otherOwner, doc.id, { title: 't', body: [] })).toThrow('Access denied');
+      expect(() => service.setManualText(otherOwner, doc.id, { title: 't', body: [] })).toThrow('Document not found');
     });
   });
 });

@@ -408,6 +408,7 @@ export function createDocumentService({ db, queue, fileStorage, docTypes, templa
 
     /**
      * Mark document as processed (called by AI handler).
+     * Updates current_version_id to the latest version for this document.
      * No-op if document doesn't exist (safe for race conditions).
      *
      * @param {string} documentId
@@ -415,11 +416,17 @@ export function createDocumentService({ db, queue, fileStorage, docTypes, templa
     markProcessed(documentId) {
       const doc = getDoc.get(documentId);
       if (!doc) return;
+
+      // Find the latest version for this document
+      const latestVersion = db.prepare(
+        'SELECT id FROM versions WHERE document_id = ? ORDER BY created_at DESC LIMIT 1'
+      ).get(documentId);
+
       updateDoc.run({
         id: documentId, docType: doc.doc_type, templateId: doc.template_id,
         sourceText: doc.source_text, draftVersion: doc.draft_version,
         userFields: doc.user_fields, status: 'processed',
-        currentVersionId: doc.current_version_id, lastError: null, now: now(),
+        currentVersionId: latestVersion?.id || doc.current_version_id, lastError: null, now: now(),
       });
     },
 
