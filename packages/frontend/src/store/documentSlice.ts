@@ -19,14 +19,15 @@ const initialState: DocumentState = {
   text: '',
   correctedText: '',
   requisites: {},
-  documentType: 'sluzhebnaya',
-  templateId: 'official',
+  documentType: 'memo',
+  templateId: 'classic',
   missingFields: [],
   warnings: [],
   status: '',
   error: '',
   processing: false,
   generating: false,
+  documentId: undefined,
 };
 
 // ---------------------------------------------------------------------------
@@ -38,14 +39,15 @@ const initialState: DocumentState = {
  */
 export const processText = createAsyncThunk<
   ProcessResponse,
-  { text: string; documentType: DocumentTypeId },
+  { text: string; documentType: DocumentTypeId; templateId: TemplateId },
   { rejectValue: string }
->('document/processText', async ({ text, documentType }, { rejectWithValue }) => {
+>('document/processText', async ({ text, documentType, templateId }, { rejectWithValue }) => {
   try {
-    const response = await fetch('/api/process', {
+    const response = await fetch('/api/documents', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, documentType }),
+      credentials: 'include',
+      body: JSON.stringify({ sourceText: text, docType: documentType, templateId }),
     });
 
     if (!response.ok) {
@@ -55,8 +57,29 @@ export const processText = createAsyncThunk<
       );
     }
 
-    const payload = (await response.json()) as ProcessResponse;
-    return payload;
+    const document = (await response.json()) as import('@/types/document').DocumentView;
+    const process = await fetch(`/api/documents/${document.id}/process`, {
+      method: 'POST', credentials: 'include',
+    });
+    if (!process.ok) return rejectWithValue(await getErrorMessage(process));
+
+    let current = document;
+    for (let attempt = 0; attempt < 240; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      const statusResponse = await fetch(`/api/documents/${document.id}`, { credentials: 'include' });
+      if (!statusResponse.ok) return rejectWithValue(await getErrorMessage(statusResponse));
+      current = (await statusResponse.json()) as import('@/types/document').DocumentView;
+      if (current.status === 'processed' || current.status === 'ai_failed') break;
+    }
+    if (current.status === 'ai_failed') return rejectWithValue(current.error ?? 'Обработка текста не удалась');
+    if (!current.version) return rejectWithValue('Сервер не вернул обработанный документ');
+    return {
+      correctedText: current.version.body.join('\n'),
+      requisites: { ...current.version.aiFields, ...current.userFields },
+      validation: { missing: [], warnings: current.version.warnings ?? [] },
+      source: current.id,
+      documentId: current.id,
+    } as ProcessResponse & { documentId: string };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Network error';
     return rejectWithValue(message);
@@ -80,93 +103,47 @@ export const generateDocument = createAsyncThunk<
   'document/generateDocument',
   async (
     { text, correctedText, requisites, documentType, templateId },
-    { dispatch, rejectWithValue },
+    { getState, rejectWithValue },
   ) => {
     try {
-      const response = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, correctedText, requisites, documentType, templateId }),
+      let documentId = (getState() as { document: DocumentState }).document.documentId;
+      if (!documentId) return rejectWithValue('Документ ещё не создан');
+
+      const textResponse = await fetch(`/api/documents/${documentId}/text`, {
+        method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'Документ', body: correctedText.split(/\r?\n/).filter(Boolean) }),
+      });
+      if (!textResponse.ok) return rejectWithValue(await getErrorMessage(textResponse));
+      const fieldsResponse = await fetch(`/api/documents/${documentId}/fields`, {
+        method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requisites),
+      });
+      if (!fieldsResponse.ok) return rejectWithValue(await getErrorMessage(fieldsResponse));
+
+      const response = await fetch(`/api/documents/${documentId}/render`, {
+        method: 'POST', credentials: 'include',
       });
 
       if (!response.ok) {
         return rejectWithValue(`Server error ${response.status}`);
       }
 
-      const reader = response.body?.getReader();
-      if (!reader) return rejectWithValue('No response stream');
-
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-
-        for (const line of lines) {
-          if (!line.startsWith('data:')) continue;
-          const data = line.slice(5).trim();
-          if (!data) continue;
-
-          try {
-            const event = JSON.parse(data) as {
-              type: string;
-              message?: string;
-              missing?: Array<{ field: string; label: string }>;
-              warnings?: string[];
-              data?: string;
-              filename?: string;
-            };
-
-            switch (event.type) {
-              case 'status':
-                dispatch(setStatus(event.message ?? ''));
-                break;
-              case 'validation':
-                if (event.missing) dispatch(setMissingFields(event.missing));
-                if (event.warnings) dispatch(setWarnings(event.warnings));
-                break;
-              case 'error':
-                dispatch(setError(event.message ?? 'Generation failed'));
-                break;
-              case 'done': {
-                // Decode base64 DOCX and trigger download
-                if (event.data) {
-                  const binary = atob(event.data);
-                  const bytes = new Uint8Array(binary.length);
-                  for (let i = 0; i < binary.length; i++) {
-                    bytes[i] = binary.charCodeAt(i);
-                  }
-                  const blob = new Blob([bytes], {
-                    type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                  });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = event.filename ?? 'document.docx';
-                  document.body.appendChild(a);
-                  a.click();
-                  document.body.removeChild(a);
-                  URL.revokeObjectURL(url);
-                }
-                break;
-              }
-            }
-          } catch {
-            // Skip malformed SSE lines
-          }
-        }
-      }
+      const result = (await response.json()) as { downloadUrl: string; filename: string };
+      const link = document.createElement('a');
+      link.href = result.downloadUrl;
+      link.download = result.filename;
+      link.click();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Network error';
       return rejectWithValue(message);
     }
   },
 );
+
+async function getErrorMessage(response: Response) {
+  const body = await response.json().catch(() => ({})) as { error?: { message?: string }; message?: string };
+  return body.error?.message ?? body.message ?? `Server error ${response.status}`;
+}
 
 // ---------------------------------------------------------------------------
 // Slice
@@ -232,6 +209,7 @@ const documentSlice = createSlice({
         state.missingFields = action.payload.validation.missing;
         state.warnings = action.payload.validation.warnings;
         state.status = 'Текст обработан';
+        state.documentId = action.payload.documentId;
       })
       .addCase(processText.rejected, (state, action) => {
         state.processing = false;

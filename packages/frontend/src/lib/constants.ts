@@ -9,15 +9,22 @@ export const DOCUMENT_TYPES: Array<{
   label: string;
   description: string;
 }> = [
-  { id: 'sluzhebnaya', label: 'Служебная записка', description: 'Внутренняя переписка' },
-  { id: 'dokladnaya', label: 'Докладная записка', description: 'Формальный отчёт' },
-  { id: 'informacionnaya', label: 'Информационная справка', description: 'Справка с фактами' },
-  { id: 'pismo', label: 'Письмо', description: 'Внешняя корреспонденция' },
+  { id: 'memo', label: 'Служебная записка', description: 'Внутренняя переписка' },
+  { id: 'report', label: 'Докладная записка', description: 'Формальный отчёт' },
+  { id: 'reference', label: 'Информационная справка', description: 'Справка с фактами' },
+  { id: 'letter', label: 'Письмо', description: 'Внешняя корреспонденция' },
 ];
 
 export const FIELD_LABELS: Record<string, string> = {
-  to: 'Адресат',
-  from: 'Автор / отправитель',
+  addressee: 'Адресат',
+  authorPosition: 'Должность автора',
+  authorName: 'ФИО автора',
+  addresseeOrg: 'Организация-получатель',
+  addresseePerson: 'ФИО получателя',
+  addresseeAddress: 'Адрес получателя',
+  signerPosition: 'Должность подписывающего',
+  signerName: 'ФИО подписывающего',
+  period: 'Период',
   date: 'Дата',
   subject: 'Заголовок / тема',
   number: 'Номер',
@@ -28,9 +35,15 @@ export const FIELD_LABELS: Record<string, string> = {
 };
 
 export const FIELD_ORDER: string[] = [
-  'to',
-  'from',
-  'position',
+  'addressee',
+  'authorPosition',
+  'authorName',
+  'addresseeOrg',
+  'addresseePerson',
+  'addresseeAddress',
+  'signerPosition',
+  'signerName',
+  'period',
   'date',
   'number',
   'subject',

@@ -77,8 +77,8 @@ export const DraftSection = memo(function DraftSection({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="official">Классический корпоративный</SelectItem>
-              <SelectItem value="standard">Современный регламентный</SelectItem>
+               <SelectItem value="classic">Классический корпоративный</SelectItem>
+               <SelectItem value="modern">Современный регламентный</SelectItem>
             </SelectContent>
           </Select>
           <span className="mt-1 block text-xs text-gray-500">

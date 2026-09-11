@@ -3,9 +3,9 @@
  * Used by Redux store, components, and API utilities.
  */
 
-export type DocumentTypeId = 'sluzhebnaya' | 'dokladnaya' | 'informacionnaya' | 'pismo';
+export type DocumentTypeId = 'memo' | 'report' | 'reference' | 'letter';
 
-export type TemplateId = 'official' | 'standard';
+export type TemplateId = 'classic' | 'modern';
 
 export type Requisites = Record<string, string>;
 
@@ -22,6 +22,19 @@ export interface ProcessResponse {
     warnings: string[];
   };
   source: string;
+  documentId?: string;
+}
+
+export interface DocumentView {
+  id: string;
+  status: string;
+  docType: DocumentTypeId | null;
+  templateId: TemplateId | null;
+  sourceText: string;
+  draftVersion: number;
+  userFields: Requisites;
+  version: { title: string; body: string[]; aiFields: Requisites; warnings?: string[] } | null;
+  error: string | null;
 }
 
 export interface GenerateRequest {
@@ -44,4 +57,5 @@ export interface DocumentState {
   error: string;
   processing: boolean;
   generating: boolean;
+  documentId?: string;
 }

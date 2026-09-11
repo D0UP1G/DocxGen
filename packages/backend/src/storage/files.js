@@ -19,6 +19,9 @@ export function createFileStorage(dataDir) {
     save(buffer, filename) {
       const id = crypto.randomUUID();
       const filePath = path.join(filesDir, `${id}.docx`);
+      // The directory can be removed by an external cleanup process while the
+      // server is running, so ensure it exists immediately before saving too.
+      fs.mkdirSync(filesDir, { recursive: true });
       fs.writeFileSync(filePath, buffer);
       return { id, path: filePath, filename };
     },
