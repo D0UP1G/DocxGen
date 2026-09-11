@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { DomainError } from './errors.js';
+import { mergeRequisites } from '../validation/requisites.js';
 
 /**
  * Create the document service — the CENTRAL service for document lifecycle.
@@ -459,7 +460,15 @@ export function createDocumentService({ db, queue, fileStorage, docTypes, templa
       const docType = docTypes.get(doc.doc_type);
       const { template, fallback } = templates.get(doc.template_id);
 
-      const values = {}; // Would come from mergeRequisites — simplified here
+      const aiFields = JSON.parse(version.ai_fields || '{}');
+      const { values, placeholders } = mergeRequisites({
+        docType,
+        template,
+        aiFields,
+        title: version.title,
+        userFields: JSON.parse(doc.user_fields || '{}'),
+        today: new Date().toISOString().slice(0, 10),
+      });
       const model = {
         docType,
         template,
@@ -489,11 +498,11 @@ export function createDocumentService({ db, queue, fileStorage, docTypes, templa
         id: fileId, documentId: id, versionId: version.id,
         templateId: doc.template_id, fieldsHash,
         path: saved.path, filename,
-        placeholders: '[]', // Would come from mergeRequisites
+        placeholders: JSON.stringify(placeholders),
         now: now(),
       });
 
-      return { file: getFile.get(fileId), fallback: fallback?.requestedId || null, placeholders: [] };
+      return { file: getFile.get(fileId), fallback: fallback?.requestedId || null, placeholders };
     },
 
     /**

@@ -18,7 +18,7 @@ import { rateLimiter } from './rateLimiter.js';
  * @returns {Router}
  */
 export function createApiRouter(deps = {}) {
-  const { documentService, docTypes, templates, fileStorage, log } = deps;
+  const { documentService, docTypes, templates, fileStorage, log, processDraft, provider } = deps;
   const router = Router();
 
   // Rate limit mutating routes only (POST/PUT/PATCH/DELETE)
@@ -27,6 +27,84 @@ export function createApiRouter(deps = {}) {
 
   // Expose reset for testing — clears all IP counters
   if (mutate.reset) router.resetRateLimit = mutate.reset;
+
+  // Compatibility endpoint for the current frontend. It creates a normal
+  // backend document and processes it synchronously; the canonical API below
+  // remains asynchronous and queue-backed.
+  router.post('/api/process', mutate, async (req, res) => {
+    const { text, documentType } = req.body || {};
+    if (typeof text !== 'string' || !text.trim()) {
+      res.status(400).json({ error: { code: 'DRAFT_EMPTY', message: 'text is required' } });
+      return;
+    }
+    const typeMap = { sluzhebnaya: 'memo', dokladnaya: 'report', informacionnaya: 'reference', pismo: 'letter' };
+    const typeId = typeMap[documentType] || documentType;
+    const type = docTypes?.get?.(typeId);
+    if (!type) {
+      res.status(400).json({ error: { code: 'UNKNOWN_TYPE', message: 'Unknown document type' } });
+      return;
+    }
+    if (!documentService || !processDraft || !provider) {
+      res.status(503).json({ error: { code: 'INTERNAL', message: 'Backend is not fully initialized' } });
+      return;
+    }
+
+    try {
+      const result = await processDraft({ draft: text, docType: type, userFields: {}, provider, log });
+      const requisites = {};
+      const missing = [];
+      for (const field of type.fields) {
+        const value = field.key === 'title' ? result.title : result.aiFields[field.key]?.value;
+        if (value) requisites[field.key] = value;
+        else if (field.required && field.kind !== 'auto' && field.kind !== 'registry') {
+          missing.push({ field: field.key, label: field.label });
+        }
+      }
+      res.json({
+        correctedText: result.body.join('\n'),
+        requisites,
+        validation: { missing, warnings: result.warnings.map(w => w.reason || String(w)) },
+        source: text,
+      });
+    } catch (err) {
+      res.status(503).json({ error: { code: 'AI_UNAVAILABLE', message: err.message } });
+    }
+  });
+
+  // Compatibility endpoint for the current frontend's SSE generation call.
+  router.post('/api/generate', mutate, async (req, res) => {
+    const { text, correctedText, requisites = {}, documentType, templateId } = req.body || {};
+    if (typeof correctedText !== 'string' || !correctedText.trim()) {
+      res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'correctedText is required' } });
+      return;
+    }
+    const typeMap = { sluzhebnaya: 'memo', dokladnaya: 'report', informacionnaya: 'reference', pismo: 'letter' };
+    const templateMap = { official: 'classic', standard: 'modern' };
+    const owner = req.owner;
+    res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
+    res.flushHeaders();
+    const send = event => res.write(`data: ${JSON.stringify(event)}\n\n`);
+    try {
+      const doc = documentService.create(owner);
+      documentService.setType(owner, doc.id, typeMap[documentType] || documentType || 'memo');
+      documentService.setTemplate(owner, doc.id, templateMap[templateId] || templateId || 'classic');
+      documentService.setDraft(owner, doc.id, text || correctedText, { mode: 'replace' });
+      send({ type: 'status', message: 'Формирование документа…' });
+      const body = correctedText.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+      const title = requisites.subject || requisites.title || null;
+      documentService.setManualText(owner, doc.id, { title, body });
+      for (const [key, value] of Object.entries(requisites)) {
+        if (value !== null && value !== undefined && String(value).trim()) documentService.setField(owner, doc.id, key, value);
+      }
+      const result = await documentService.render(owner, doc.id);
+      send({ type: 'validation', missing: [], warnings: result.placeholders });
+      send({ type: 'done', data: fs.readFileSync(result.file.path).toString('base64'), filename: result.file.filename });
+    } catch (err) {
+      send({ type: 'error', message: err.message || 'Generation failed' });
+    } finally {
+      res.end();
+    }
+  });
 
   // ── Health ────────────────────────────────────────────────────────────────
 

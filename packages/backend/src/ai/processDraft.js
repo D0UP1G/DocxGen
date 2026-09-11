@@ -29,7 +29,7 @@ export async function processDraft({ draft, docType, userFields, provider, log, 
   }
 
   // Step 1: Build messages and call AI
-  const messages = buildMessages({ draft, docType });
+  const messages = buildMessages({ draft, docType, userFields });
 
   let raw;
   try {
@@ -49,7 +49,7 @@ export async function processDraft({ draft, docType, userFields, provider, log, 
     log?.warn({ error: err.message }, 'ai_json_parse_failed, retrying');
     const retryMessages = [
       ...messages,
-      { role: 'user', content: 'Ответ не соответствует схеме. Верни только JSON-объект без markdown.' },
+      { role: 'user', content: 'Исправь предыдущий ответ. Верни только один валидный JSON-объект по схеме из system-сообщения: без markdown, комментариев и лишних ключей. Для неизвестных реквизитов используй null, факты не выдумывай.' },
     ];
     try {
       raw = await provider.complete(retryMessages);

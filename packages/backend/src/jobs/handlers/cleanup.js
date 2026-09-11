@@ -15,7 +15,7 @@ import path from 'node:path';
  */
 export function createCleanupHandler({ db, dataDir, log, env }) {
   return function cleanup() {
-    if (env.CLEANUP_ENABLED !== '1') return;
+    if (env.CLEANUP_ENABLED !== true && env.CLEANUP_ENABLED !== '1') return;
 
     const now = new Date();
     let totalRemoved = 0;

@@ -10,6 +10,53 @@ import type {
   TemplateId,
   ProcessResponse,
 } from '@/types/document';
+import { DOC_TYPE_MAP, TEMPLATE_MAP } from '@/lib/constants';
+
+const BACKEND_TO_FRONTEND_FIELDS: Record<string, string> = {
+  addressee: 'to',
+  authorPosition: 'position',
+  authorName: 'signature',
+  addresseeOrg: 'to',
+  addresseePerson: 'to',
+  addresseeAddress: 'to',
+  signerPosition: 'position',
+  signerName: 'signature',
+  salutation: 'greeting',
+  executor: 'executor',
+  date: 'date',
+  number: 'number',
+  title: 'subject',
+};
+
+const FRONTEND_TO_BACKEND_FIELDS: Record<string, string> = {
+  to: 'addressee',
+  from: 'authorName',
+  position: 'authorPosition',
+  subject: 'title',
+  greeting: 'salutation',
+  signature: 'authorName',
+};
+
+function toFrontendRequisites(fields: Record<string, string>) {
+  return Object.entries(fields).reduce<Record<string, string>>((result, [key, value]) => {
+    result[BACKEND_TO_FRONTEND_FIELDS[key] ?? key] = value;
+    return result;
+  }, {});
+}
+
+function toBackendRequisites(fields: Record<string, string>) {
+  return Object.entries(fields).reduce<Record<string, string>>((result, [key, value]) => {
+    result[FRONTEND_TO_BACKEND_FIELDS[key] ?? key] = value;
+    return result;
+  }, {});
+}
+
+function parseSseEvents(buffer: string) {
+  return buffer.split('\n').filter(line => line.startsWith('data:')).map(line => {
+    try { return JSON.parse(line.slice(5).trim()) as { type: string; message?: string; missing?: Array<{ field: string; label: string }>; warnings?: string[]; data?: string; filename?: string }; }
+    catch { return null; }
+  }).filter((event): event is NonNullable<typeof event> => event !== null);
+}
 
 // ---------------------------------------------------------------------------
 // Initial state
@@ -42,21 +89,24 @@ export const processText = createAsyncThunk<
   { rejectValue: string }
 >('document/processText', async ({ text, documentType }, { rejectWithValue }) => {
   try {
-    const response = await fetch('/api/process', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, documentType }),
+      const response = await fetch('/api/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ text, documentType: DOC_TYPE_MAP[documentType] }),
     });
 
     if (!response.ok) {
       const errorBody = await response.json().catch(() => ({}));
       return rejectWithValue(
-        (errorBody as { message?: string }).message ?? `Server error ${response.status}`,
+        (errorBody as { message?: string; error?: { message?: string } }).error?.message
+          ?? (errorBody as { message?: string }).message
+          ?? `Server error ${response.status}`,
       );
     }
 
     const payload = (await response.json()) as ProcessResponse;
-    return payload;
+    return { ...payload, requisites: toFrontendRequisites(payload.requisites) };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Network error';
     return rejectWithValue(message);
@@ -86,11 +136,22 @@ export const generateDocument = createAsyncThunk<
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, correctedText, requisites, documentType, templateId }),
+        credentials: 'include',
+        body: JSON.stringify({
+          text,
+          correctedText,
+          requisites: toBackendRequisites(requisites),
+          documentType: DOC_TYPE_MAP[documentType],
+          templateId: TEMPLATE_MAP[templateId],
+        }),
       });
 
       if (!response.ok) {
-        return rejectWithValue(`Server error ${response.status}`);
+        const errorBody = await response.json().catch(() => ({}));
+        return rejectWithValue(
+          (errorBody as { error?: { message?: string } }).error?.message
+            ?? `Server error ${response.status}`,
+        );
       }
 
       const reader = response.body?.getReader();
@@ -159,6 +220,19 @@ export const generateDocument = createAsyncThunk<
           } catch {
             // Skip malformed SSE lines
           }
+        }
+      }
+
+      for (const event of parseSseEvents(buffer)) {
+        if (event.type === 'done' && event.data) {
+          const binary = atob(event.data);
+          const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
+          const url = URL.createObjectURL(new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }));
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = event.filename ?? 'document.docx';
+          a.click();
+          URL.revokeObjectURL(url);
         }
       }
     } catch (err) {

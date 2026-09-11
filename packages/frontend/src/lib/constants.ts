@@ -2,7 +2,7 @@
  * Shared constants for the DocxGen document generator.
  */
 
-import type { DocumentTypeId } from '@/types/document';
+import type { DocumentTypeId, TemplateId } from '@/types/document';
 
 export const DOCUMENT_TYPES: Array<{
   id: DocumentTypeId;
@@ -38,3 +38,17 @@ export const FIELD_ORDER: string[] = [
   'greeting',
   'executor',
 ];
+
+// IDs used by the existing UI are kept for compatibility with the design.
+// The backend catalog uses its canonical IDs.
+export const DOC_TYPE_MAP: Record<DocumentTypeId, string> = {
+  sluzhebnaya: 'memo',
+  dokladnaya: 'report',
+  informacionnaya: 'reference',
+  pismo: 'letter',
+};
+
+export const TEMPLATE_MAP: Record<TemplateId, string> = {
+  official: 'classic',
+  standard: 'modern',
+};

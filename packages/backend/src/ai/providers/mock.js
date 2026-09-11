@@ -24,11 +24,19 @@ export function createMockProvider() {
 
       const paragraphs = draft.split('\n').filter(p => p.trim());
 
+      const fields = {};
+      const fieldLines = systemMsg.match(/- ([a-zA-Z][\w-]*):/g) || [];
+      for (const line of fieldLines) {
+        const key = line.slice(2, -1);
+        const label = key === 'addressee' ? /(?:кому|адресат)\s*:\s*([^.!?\n]+)/i.exec(draft)?.[1] : null;
+        fields[key] = label ? { value: label.trim(), quote: label.trim() } : null;
+      }
+
       return JSON.stringify({
-        title: `О ${docTypeName.toLowerCase()}`,
+        title: paragraphs[0] ? `О ${paragraphs[0].replace(/[.!?].*$/, '').slice(0, 120).toLowerCase()}` : null,
         body: paragraphs.length > 0 ? paragraphs : ['(пустой черновик)'],
-        fields: {},
-        changes: ['Текст обработан (мок-режим)'],
+        fields,
+        changes: paragraphs.length > 0 ? [] : ['Черновик пуст'],
       });
     },
   };

@@ -13,7 +13,7 @@ import { events } from '../../core/events.js';
  * @param {{ documentService: object, processDraft: function, log: object }} deps
  * @returns {function} handler(job) → 'stale' | void
  */
-export function createProcessDocumentHandler({ documentService, processDraft, log }) {
+export function createProcessDocumentHandler({ documentService, processDraft, docTypes, provider, log }) {
   return async function processDocument(job) {
     const payload = job.payload ? JSON.parse(job.payload) : {};
     const { documentId, draftVersion, docType } = payload;
@@ -34,8 +34,9 @@ export function createProcessDocumentHandler({ documentService, processDraft, lo
       // Process through AI
       const result = await processDraft({
         draft: doc.source_text,
-        docType: doc.doc_type_config,
+        docType: docTypes?.get?.(doc.doc_type) || doc.doc_type_config,
         userFields: JSON.parse(doc.user_fields || '{}'),
+        provider,
         log,
       });
 
