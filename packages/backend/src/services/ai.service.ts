@@ -135,12 +135,19 @@ export async function generateTypstStream(
   userText: string,
   onChunk: (chunk: string) => void,
 ): Promise<string> {
-  const prompt = `Generate a professional Typst document from the following Russian text content. 
+  const prompt = `Generate a ГОСТ-compliant Typst document from the following Russian text content. The document MUST follow ГОСТ standards for Russian business documentation (ГОСТ Р 7.0.5-2008, ГОСТ 2.105-95, ГОСТ Р 6.30-2003).
 
-Requirements:
+ГОСТ Requirements (MANDATORY):
 - Output ONLY valid Typst markup (no markdown fences, no explanations)
-- Use A4 paper with professional margins
-- Include visual elements: tables, colored boxes, metric cards where appropriate
+- A4 paper with ГОСТ margins: left 3cm, right 1.5cm, top 2cm, bottom 2cm
+- Font: Times New Roman (or Libertinus Serif as fallback), body text 14pt
+- Line spacing: 1.5 (0.83em leading), first-line indent: 1.25cm
+- Headings: 12-14pt, bold
+- Document header (шапка): Кому, От кого, Дата, Номер, Заголовок
+- Signature block (подпись) at the end with lines for signatures
+- Russian typography: use «» for quotes, — for em-dash (not hyphen), non-breaking spaces after initials (И. И.)
+- Include visual elements: tables with borders, colored boxes, metric cards where appropriate
+- Tables must use stroke: 0.5pt for proper ГОСТ borders
 - All content must be in Russian
 - Use proper Typst syntax
 

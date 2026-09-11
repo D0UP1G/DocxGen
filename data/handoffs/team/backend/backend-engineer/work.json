@@ -1,0 +1,37 @@
+{
+  "headers": {
+    "timestamp": "2026-09-11T12:00:00Z",
+    "agent_id": "team/backend/backend-engineer",
+    "session_start": "2026-09-11T12:00:00Z",
+    "session_end": "2026-09-11T12:05:00Z",
+    "vector": "gost-compliance-update"
+  },
+  "data": {
+    "shared": {
+      "key_facts": [
+        "Updated ai.service.ts prompt to require ГОСТ compliance (ГОСТ Р 7.0.5-2008, ГОСТ 2.105-95, ГОСТ Р 6.30-2003)",
+        "Added ГОСТ DOCUMENT FORMATTING RULES section to typst-reference.ts",
+        "ГОСТ margins: left 3cm, right 1.5cm, top 2cm, bottom 2cm",
+        "Typography: Times New Roman 14pt, line spacing 1.5, indent 1.25cm",
+        "Added templates: document header (шапка), signature block (подпись), table formatting",
+        "Russian typography rules: «» quotes, — em-dash, non-breaking spaces after initials",
+        "All TypeScript checks pass (tsc --noEmit)"
+      ],
+      "call_chains": [
+        "prompts.ts -> typst-reference.ts (imports TYPST_REFERENCE)",
+        "ai.service.ts -> runInContainer (uses prompt with ГОСТ rules)"
+      ],
+      "blast_radius": [
+        "packages/backend/src/services/ai.service.ts",
+        "packages/backend/src/typst-reference.ts"
+      ],
+      "research_sources": [
+        "ГОСТ Р 7.0.5-2008",
+        "ГОСТ 2.105-95",
+        "ГОСТ Р 6.30-2003"
+      ]
+    },
+    "for_teamlead": "✅ DONE. Updated both files for ГОСТ compliance: (1) ai.service.ts prompt now explicitly requires ГОСТ margins, typography, header/footer, and Russian formatting rules; (2) typst-reference.ts now includes complete ГОСТ section with page setup, typography, document header, signature block, table formatting, Russian typography rules, and a full document template. TypeScript compilation passes clean. The AI will now generate ГОСТ-compliant Russian business documents.",
+    "for_successor": "team/quality/test-engineer — verify that the updated prompts produce valid ГОСТ-compliant Typst output by running the document generation flow end-to-end"
+  }
+}
