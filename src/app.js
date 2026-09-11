@@ -2,6 +2,8 @@ import express from 'express';
 import cookieParser from 'cookie-parser';
 import pinoHttp from 'pino-http';
 import { errorHandler } from './http/errorHandler.js';
+import { sessionMiddleware } from './http/session.js';
+import { createApiRouter } from './http/api.js';
 
 /**
  * createApp — factory function that builds the Express application.
@@ -27,16 +29,14 @@ export function createApp({ log, deps = {} } = {}) {
   // Cookie parsing for web-client session tokens
   app.use(cookieParser());
 
+  // Session middleware — creates sid cookie and attaches req.owner
+  app.use(sessionMiddleware());
+
   // HTTP request logging — injects req.log for downstream use
   app.use(pinoHttp({ logger: log }));
 
-  // Health check — simple liveness probe for Docker / load balancers
-  app.get('/health', (_req, res) => {
-    res.json({ ok: true });
-  });
-
-  // Future routes will be mounted here:
-  // app.use('/api', apiRouter(deps));
+  // API routes — health is always available; document routes require deps
+  app.use(createApiRouter(deps));
 
   // Error handler — must be last middleware
   app.use(errorHandler(log));
