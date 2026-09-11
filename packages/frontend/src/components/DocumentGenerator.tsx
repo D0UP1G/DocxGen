@@ -21,6 +21,7 @@ export function DocumentGenerator() {
   const [showTypst, setShowTypst] = useState(true);
   const [retryAttempts, setRetryAttempts] = useState<RetryAttempt[]>([]);
   const [missingFields, setMissingFields] = useState<{field: string, label: string}[]>([]);
+  const [templateId, setTemplateId] = useState('official');
   const typstRef = useRef<HTMLPreElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
 
@@ -42,7 +43,7 @@ export function DocumentGenerator() {
       const response = await fetch('http://localhost:3001/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, templateId }),
       });
 
       if (!response.ok) {
@@ -253,6 +254,20 @@ export function DocumentGenerator() {
           rows={8}
           className="resize-none"
         />
+
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Шаблон оформления
+          </label>
+          <select
+            value={templateId}
+            onChange={(e) => setTemplateId(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="official">Официальный (ГОСТ)</option>
+            <option value="standard">Стандартный</option>
+          </select>
+        </div>
 
         {/* Current Status */}
         {status && (

@@ -3,26 +3,28 @@
     "timestamp": "2026-09-11T00:00:00Z",
     "agent_id": "team/backend/backend-engineer",
     "session_start": "2026-09-11T00:00:00Z",
-    "session_end": "2026-09-11T00:01:00Z",
-    "vector": "docxgen-validation-wireup"
+    "session_end": "2026-09-11T00:00:00Z",
+    "vector": "docxgen-v1"
   },
   "data": {
     "shared": {
       "key_facts": [
-        "validateRequisites and getFieldLabel imported from validation.service.ts",
-        "Validation runs after AI processing, before Typst compilation",
-        "Missing fields replaced with [Заполнить] placeholder in typstContent",
-        "Frontend receives 'validation' SSE event with missing field details"
+        "Template registry activated with official + standard templates",
+        "Route accepts templateId from request body (default: official)",
+        "Typst generation now uses template.generate() instead of raw correctedText"
       ],
       "call_chains": [
-        "document.ts -> validation.service.ts: validateRequisites, getFieldLabel"
+        "import { officialTemplate } from ./official",
+        "import { standardTemplate } from ./standard",
+        "import { getTemplate } from ../templates"
       ],
       "blast_radius": [
+        "packages/backend/src/templates/index.ts",
         "packages/backend/src/routes/document.ts"
       ],
       "research_sources": []
     },
-    "for_teamlead": "DONE. Validation service wired into document generation route. Import added (line 7), validateRequisites called after AI result (line 50), validation event sent to frontend (lines 52-59), missing fields replaced with [Заполнить] placeholder (lines 67-73). TypeScript compiles clean. File is 151 lines.",
-    "for_successor": "Next: test-engineer — write unit test for the validation wiring in document.ts route (mock aiResult with missing requisites, assert validation event is sent)."
+    "for_teamlead": "GREEN — templates activated. Two files modified: (1) templates/index.ts: uncommented imports + registry entries for official and standard templates; (2) routes/document.ts: imported getTemplate, accepts templateId from request body (default official), generates Typst via template.generate() instead of raw correctedText. No regressions, no new dependencies. Ready for test engineer to verify.",
+    "for_successor": "next: test engineer — verify that templates/official.ts and templates/standard.ts export correct TypstTemplate objects and that the generate() function produces valid Typst markup. Check that the route correctly falls back to official template when templateId is missing."
   }
 }

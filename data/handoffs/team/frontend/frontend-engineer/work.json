@@ -9,21 +9,21 @@
   "data": {
     "shared": {
       "key_facts": [
-        "Added missingFields state (array of {field, label})",
-        "Added 'validation' case in SSE switch to set missingFields from data.missing",
-        "Added yellow warning banner UI above download button listing missing fields",
-        "validationMessage state removed — unused in UI (message field available in data if needed later)",
-        "resetState() clears missingFields on new generation"
+        "Template selector dropdown added to DocumentGenerator.tsx",
+        "State: templateId defaults to 'official'",
+        "Request body now sends: { text, templateId }",
+        "Two options: official (ГОСТ) and standard",
+        "Backend accepts templateId and defaults to 'official' if missing"
       ],
       "call_chains": [
-        "SSE switch -> case 'validation' -> setMissingFields(data.missing)"
+        "DocumentGenerator -> fetch('/api/generate', { text, templateId }) -> backend"
       ],
       "blast_radius": [
         "packages/frontend/src/components/DocumentGenerator.tsx"
       ],
       "research_sources": []
     },
-    "for_teamlead": "✅ DONE — Added validation event handling to DocumentGenerator.tsx. Added missingFields state, a 'validation' case in the SSE handler, and a yellow warning banner displaying missing required fields above the download button. TypeScript compiles clean, build succeeds. Removed unused validationMessage state to keep code clean.",
-    "for_successor": "No immediate successor needed. The component is ready for the backend to send validation events. If QA is required, spawn team/quality/test-engineer to verify the validation display renders correctly when the SSE handler receives a validation event."
+    "for_teamlead": "✅ DONE — Template selection UI implemented in DocumentGenerator.tsx. Added templateId state (default 'official'), dropdown with Официальный (ГОСТ) and Стандартный options, and sends templateId in the request body. tsc passes clean. File is 408 lines, no regressions.",
+    "for_successor": "No next agent needed — T1 change complete. If testing is desired, spawn team/quality/test-engineer to verify the dropdown renders and the request includes templateId."
   }
 }

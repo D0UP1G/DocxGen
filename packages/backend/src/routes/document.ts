@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
 import { generateTypstStream, patchTypstErrors } from '../services/ai.service';
+import { getTemplate } from '../templates';
 import { compileTypstContent, retryCompile } from '../services/typst.service';
 import { convertToDocx } from '../services/pandoc.service';
 import { validateRequisites, getFieldLabel } from '../services/validation.service';
@@ -14,7 +15,7 @@ router.post('/generate', async (req: Request, res: Response) => {
   let tmpDir: string | undefined;
 
   try {
-    const { text, documentType = 'sluzhebnaya' } = req.body;
+    const { text, documentType = 'sluzhebnaya', templateId = 'official' } = req.body;
     if (!text || typeof text !== 'string') {
       return res.status(400).json({ error: 'Text is required' });
     }
@@ -59,9 +60,16 @@ router.post('/generate', async (req: Request, res: Response) => {
       }));
     }
 
-    // Step 2: Generate Typst from structured data (will be implemented next)
-    // For now, use the corrected text
-    let typstContent = aiResult.correctedText;
+    // Step 2: Generate Typst from structured data via template
+    const template = getTemplate(templateId) || getTemplate('official');
+    if (!template) {
+      throw new Error(`Template not found: ${templateId}`);
+    }
+    let typstContent = template.generate({
+      requisites: aiResult.requisites,
+      body: aiResult.correctedText,
+      documentType: aiResult.documentType,
+    });
 
     // If validation failed, replace missing fields with placeholder
     if (!validation.isValid) {
