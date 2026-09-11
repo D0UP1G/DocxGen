@@ -35,6 +35,27 @@ export interface TypstTemplate {
   generate: (data: DocumentData) => string;
 }
 
+/**
+ * Escape special Typst content-mode characters so they render as literal text.
+ *
+ * WHY: Typst uses `[`/`]` for content blocks, `#` for code, `*`/`_` for
+ * bold/italic, `\` for line breaks. If body text from AI contains these,
+ * they either break compilation or render as visible syntax artifacts.
+ * Escaping them with `\` prefix makes Typst treat them as literal characters.
+ */
+export function escapeTypst(text: string): string {
+  return text
+    .replace(/\\/g, '\\\\')  // backslash first (order matters)
+    .replace(/#/g, '\\#')
+    .replace(/\[/g, '\\[')
+    .replace(/]/g, '\\]')
+    .replace(/\*/g, '\\*')
+    .replace(/_/g, '\\_')
+    .replace(/~/g, '\\~')
+    .replace(/</g, '\\<')
+    .replace(/>/g, '\\>');
+}
+
 // Individual templates register themselves here.
 import { officialTemplate } from './official';
 import { standardTemplate } from './standard';

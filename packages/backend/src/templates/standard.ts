@@ -1,33 +1,35 @@
 /**
- * Standard (упрощённый) Typst template — a lighter, modern alternative
- * to the strict ГОСТ-compliant official template.
+ * Standard (упрощённый) Typst template.
  *
- * Visual differences from official:
- * — Libertinus Serif 12pt (vs Times New Roman 14pt)
- * — Margins: left 2.5cm, right 1.5cm, top/bottom 2cm
- * — No first-line indent on body paragraphs
- * — Simplified header: labeled lines, no grid
- * — Minimal right-aligned signature block
- *
- * Registered in TEMPLATES via index.ts.
+ * A simpler, more modern style compared to the official template:
+ * — Libertinus Serif 12pt (or Times New Roman fallback)
+ * — Slightly smaller left margin (2.5cm)
+ * — No first-line indent
+ * — Simplified header (no grid, just labeled lines)
+ * — Right-aligned signature
  */
 
 import { TypstTemplate, DocumentData } from './index';
 
-/** Returns the value or a placeholder if empty/missing. */
+/** Helper — returns the value or a placeholder if empty/missing. */
 function req(value: string | undefined, fallback = '[Заполнить]'): string {
   if (!value || value.trim() === '') return fallback;
   return value;
 }
 
 /**
- * Render the Typst source for a simplified, modern-styled document.
- *
- * Key design choices:
- * — Libertinus Serif gives a lighter, more contemporary feel than Times.
- * — Smaller left margin (2.5cm vs 3cm) fits more text per line.
- * — No first-line indent simplifies the paragraph look.
- * — Header is just labeled lines — no grid, no table.
+ * Escape only the minimal set of Typst special characters.
+ */
+function esc(text: string): string {
+  return text
+    .replace(/\\/g, '\\\\')
+    .replace(/#/g, '\\#')
+    .replace(/\*/g, '\\*')
+    .replace(/_/g, '\\_');
+}
+
+/**
+ * Render the Typst source for a simplified standard document.
  */
 function generate(data: DocumentData): string {
   const { requisites, body } = data;
@@ -37,69 +39,57 @@ function generate(data: DocumentData): string {
   const numberField = req(requisites.number);
   const subjectField = req(requisites.subject);
 
-  // Split body into paragraphs — no first-line indent, just plain text blocks.
-  const bodyParagraphs = body
-    .split(/\n\n+/)
-    .map(p => p.trim())
-    .filter(p => p.length > 0);
+  // Clean body: remove carriage returns, normalize line breaks
+  const cleanBody = body
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .trim();
 
-  const bodyTypst = bodyParagraphs
-    .map(p => `  ${p}`)
-    .join('\n\n');
-
-  return `// ── Standard (упрощённый) template ──
-// Page setup: A4, relaxed margins
+  return `// Simplified standard document
 #set page(
   paper: "a4",
-  margin: (
-    left:   2.5cm,
-    right:  1.5cm,
-    top:    2cm,
-    bottom: 2cm,
-  ),
+  margin: (left: 2.5cm, right: 1.5cm, top: 2cm, bottom: 2cm),
 )
 
-// Typography: Libertinus Serif 12pt — lighter, modern feel
 #set text(
-  font: ("Libertinus Serif", "Times New Roman"),
+  font: ("Libertinus Serif", "Times New Roman", "Liberation Serif"),
   size: 12pt,
   lang: "ru",
 )
+
 #set par(
-  leading: 0.75em,   // 1.5 line spacing for 12pt
   justify: true,
+  leading: 0.83em,
 )
 
-// ── Header block (реквизиты) — simple labeled lines ──
-#pad(bottom: 0.5cm)[
-  *Кому:* ${toField} \
-  *От кого:* ${fromField} \
-  *Дата:* ${dateField} \
-  *Номер:* ${numberField} \
+// Simplified header — just lines
+#block(width: 100%, inset: (bottom: 8pt))[
+  *Кому:* ${toField} \\
+  *От:* ${fromField} \\
+  *Дата:* ${dateField} \\
+  *Номер:* ${numberField}
 ]
 
-// ── Subject line (left-aligned, bold) ──
-#pad(bottom: 0.5cm)[
-  #text(weight: "bold")[Тема: ${subjectField}]
+// Subject line — left-aligned, bold
+#text(weight: "bold", size: 13pt)[
+  ${subjectField}
 ]
 
-// ── Body text — no first-line indent ──
-${bodyTypst}
+#v(8pt)
 
-#v(1cm)
+// Body text — directly inserted
+${cleanBody}
 
-// ── Signature block — right-aligned, minimal ──
+// Simple signature — right-aligned
 #align(right)[
-  ${fromField} \
-  ${dateField}
+  ${fromField}
 ]
 `;
 }
 
-/** The standard (упрощённый) template — registered in index.ts. */
 export const standardTemplate: TypstTemplate = {
   id: 'standard',
-  name: 'Стандартный (упрощённый)',
-  description: 'Упрощённый шаблон: Libertinus Serif 12pt, уменьшенные поля, без отступа абзацев.',
+  name: 'Стандартный',
+  description: 'Упрощённый стиль для внутренних документов',
   generate,
 };

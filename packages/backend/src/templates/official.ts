@@ -9,8 +9,6 @@
  * — Header grid: Кому | Дата / От кого | Номер
  * — Centered bold subject line
  * — Signature block at the end
- *
- * This template is registered in the TEMPLATES registry via index.ts.
  */
 
 import { TypstTemplate, DocumentData } from './index';
@@ -22,13 +20,19 @@ function req(value: string | undefined, fallback = '[Заполнить]'): stri
 }
 
 /**
+ * Escape only the minimal set of Typst special characters.
+ * We do NOT escape brackets since we're not using them in the template.
+ */
+function esc(text: string): string {
+  return text
+    .replace(/\\/g, '\\\\')
+    .replace(/#/g, '\\#')
+    .replace(/\*/g, '\\*')
+    .replace(/_/g, '\\_');
+}
+
+/**
  * Render the Typst source for a ГОСТ-compliant official document.
- *
- * Rationale for Typst over DOCX generation:
- * — Typst produces clean, predictable PDF without Word-version quirks.
- * — The `typst` CLI can convert to .docx via `typst compile --format docx`
- *   when Word compatibility is required downstream.
- * — Template logic stays in TypeScript; no Word XML manipulation.
  */
 function generate(data: DocumentData): string {
   const { requisites, body } = data;
@@ -38,75 +42,69 @@ function generate(data: DocumentData): string {
   const numberField = req(requisites.number);
   const subjectField = req(requisites.subject);
 
-  // Split body into paragraphs, preserving blank-line paragraph breaks.
-  // Each non-empty line becomes its own Typst paragraph with first-line indent.
-  const bodyParagraphs = body
-    .split(/\n\n+/)
-    .map(p => p.trim())
-    .filter(p => p.length > 0);
+  // Clean body: remove carriage returns, normalize line breaks
+  const cleanBody = body
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .trim();
 
-  const bodyTypst = bodyParagraphs
-    .map(p => `#pad(first-line: 1.25cm)[\n  ${p}\n]`)
-    .join('\n\n');
-
-  return `// ── ГОСТ-compliant official document template ──
-// Page setup: A4, ГОСТ margins
+  return `// ГОСТ Р 6.30-2003 compliant document
 #set page(
   paper: "a4",
-  margin: (
-    left:   3cm,
-    right:  1.5cm,
-    top:    2cm,
-    bottom: 2cm,
-  ),
+  margin: (left: 3cm, right: 1.5cm, top: 2cm, bottom: 2cm),
 )
 
-// Typography: Times New Roman 14pt, 1.5 line spacing
 #set text(
-  font: "Times New Roman",
+  font: ("Times New Roman", "Liberation Serif"),
   size: 14pt,
   lang: "ru",
 )
+
 #set par(
-  leading: 0.83em,   // 1.5 line spacing (0.83em ≈ 14pt × 1.5)
   justify: true,
+  leading: 0.83em,
+  first-line-indent: 1.25cm,
 )
 
-// ── Header block (реквизиты) ──
-#grid(
-  columns: (1fr, 1fr),
-  column-gutter: 1cm,
-  [**Кому:** ${toField} \ ],   [**Дата:** ${dateField}],
-  [**От кого:** ${fromField} \ ], [**Номер:** ${numberField}],
-)
-
-#v(0.5cm)
-
-// ── Subject line (centered, bold) ──
-#align(center)[
-  #text(weight: "bold", size: 14pt)[Тема: ${subjectField}]
+// Header block — 2x2 grid with fields
+#block(width: 100%, inset: (bottom: 12pt))[
+  #grid(
+    columns: (1fr, 1fr),
+    gutter: 12pt,
+    [*Кому:* ${toField},],
+    [*Дата:* ${dateField},],
+    [*От кого:* ${fromField},],
+    [*Номер:* ${numberField},],
+  )
 ]
 
-#v(0.5cm)
+// Subject line — centered, bold
+#align(center)[
+  #text(weight: "bold", size: 14pt)[
+    ${subjectField}
+  ]
+]
 
-// ── Body text ──
-${bodyTypst}
+// Body text — directly inserted, no brackets
+${cleanBody}
 
-#v(1cm)
-
-// ── Signature block ──
-#align(right)[
-  ${fromField} \
-  _________________________ \
-  ${dateField}
+// Signature block
+#block(width: 100%, inset: (top: 24pt))[
+  #grid(
+    columns: (2fr, 1fr),
+    [],
+    [
+      _________________ \
+      ${fromField}
+    ],
+  )
 ]
 `;
 }
 
-/** The official ГОСТ template — registered in index.ts. */
 export const officialTemplate: TypstTemplate = {
   id: 'official',
-  name: 'Официальный (ГОСТ)',
-  description: 'Строгий ГОСТ-шаблон: A4, Times New Roman 14pt, поля по ГОСТ, сетка реквизитов.',
+  name: 'Официальный',
+  description: 'Строгий официальный стиль для деловой переписки',
   generate,
 };

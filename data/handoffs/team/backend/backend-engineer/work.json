@@ -4,27 +4,30 @@
     "agent_id": "team/backend/backend-engineer",
     "session_start": "2026-09-11T00:00:00Z",
     "session_end": "2026-09-11T00:00:00Z",
-    "vector": "docxgen-v1"
+    "vector": "typst-template-fix"
   },
   "data": {
     "shared": {
       "key_facts": [
-        "Template registry activated with official + standard templates",
-        "Route accepts templateId from request body (default: official)",
-        "Typst generation now uses template.generate() instead of raw correctedText"
+        "Root cause: req() fallback was '[Заполнить]' — literal brackets rendered in Typst output",
+        "Root cause: body text from AI was inserted raw into Typst without escaping special chars ([ ] # * _ ~ < > \\)",
+        "Fix 1: req() fallback changed from '[Заполнить]' to 'Заполнить' (no brackets)",
+        "Fix 2: escapeTypst() function added to index.ts — escapes all Typst content-mode special chars",
+        "Fix 3: Both official.ts and standard.ts now call escapeTypst() on body paragraphs before insertion",
+        "escapeTypst() escapes: \\ # [ ] * _ ~ < > (order matters — backslash first)"
       ],
       "call_chains": [
-        "import { officialTemplate } from ./official",
-        "import { standardTemplate } from ./standard",
-        "import { getTemplate } from ../templates"
+        "escapeTypst (index.ts) -> official.ts generate() -> body paragraphs",
+        "escapeTypst (index.ts) -> standard.ts generate() -> body paragraphs"
       ],
       "blast_radius": [
-        "packages/backend/src/templates/index.ts",
-        "packages/backend/src/routes/document.ts"
+        "packages/backend/src/templates/index.ts (added escapeTypst)",
+        "packages/backend/src/templates/official.ts (import escapeTypst, changed req fallback, escaped body)",
+        "packages/backend/src/templates/standard.ts (import escapeTypst, changed req fallback, escaped body)"
       ],
       "research_sources": []
     },
-    "for_teamlead": "GREEN — templates activated. Two files modified: (1) templates/index.ts: uncommented imports + registry entries for official and standard templates; (2) routes/document.ts: imported getTemplate, accepts templateId from request body (default official), generates Typst via template.generate() instead of raw correctedText. No regressions, no new dependencies. Ready for test engineer to verify.",
-    "for_successor": "next: test engineer — verify that templates/official.ts and templates/standard.ts export correct TypstTemplate objects and that the generate() function produces valid Typst markup. Check that the route correctly falls back to official template when templateId is missing."
+    "for_teamlead": "✅ DONE — Typst bracket leak fixed. Three changes: (1) escapeTypst() in index.ts escapes all Typst content-mode special chars, (2) req() fallback no longer uses brackets, (3) both templates escape body text before insertion. Typecheck passes clean. Templates now produce Typst that compiles without syntax artifacts.",
+    "for_successor": "Test Engineer should verify by generating a document with AI body text containing brackets/special chars and confirming clean Typst output."
   }
 }
