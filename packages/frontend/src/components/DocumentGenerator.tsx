@@ -24,22 +24,21 @@ export function DocumentGenerator() {
       
       if (!response.ok) {
         const err = await response.json();
-        throw new Error(err.error || 'Generation failed');
+        throw new Error(err.error || 'Ошибка генерации');
       }
       
-      // Download the file
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'generated-document.docx';
+      a.download = 'документ.docx';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred');
+      setError(err instanceof Error ? err.message : 'Произошла неизвестная ошибка');
     } finally {
       setIsLoading(false);
     }
@@ -50,15 +49,15 @@ export function DocumentGenerator() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <FileText className="h-5 w-5" />
-          DocxGen — Generador de Documentos
+          DocxGen — Генератор документов
         </CardTitle>
         <CardDescription>
-          Ingresa tu texto y la IA generará un documento Typst, que será convertido a .docx
+          Введите текст, и ИИ сгенерирует документ Typst, который будет преобразован в .docx
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <Textarea
-          placeholder="Escribe o pega tu texto aquí... La IA lo convertirá en un documento profesional."
+          placeholder="Введите или вставьте текст здесь... ИИ преобразует его в профессиональный документ."
           value={text}
           onChange={(e) => setText(e.target.value)}
           rows={8}
@@ -79,12 +78,12 @@ export function DocumentGenerator() {
           {isLoading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Generando documento...
+              Генерация документа...
             </>
           ) : (
             <>
               <Download className="mr-2 h-4 w-4" />
-              Generar y Descargar .docx
+              Сгенерировать и скачать .docx
             </>
           )}
         </Button>
