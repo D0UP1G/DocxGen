@@ -115,9 +115,4 @@ export const DOCUMENT_TYPES: Record<DocumentTypeId, DocumentType> = {
   },
 };
 
-/**
- * Flat array of document types for UI dropdowns / select inputs.
- * Each entry carries the `id` and `nameRu` for easy rendering.
- */
-export const DOCUMENT_TYPE_LIST: { id: DocumentTypeId; label: string }[] =
-  Object.values(DOCUMENT_TYPES).map((t) => ({ id: t.id, label: t.nameRu }));
+

@@ -87,7 +87,7 @@ ${typeInstructions[documentType] || typeInstructions.sluzhebnaya}
 КРИТИЧЕСКИ ВАЖНО:
 1. correctedText должен быть ЧИСТЫМ текстом — только слова и абзацы, разделённые пустыми строками
 2. НИКОГДА не используй markdown (и никакую другую разметку) — ни **жирный**, ни *курсив*, ни # заголовки, ни - списки, ни > цитаты, ни обратные кавычки, ни | таблицы
-3. НЕ добавляй никаких символов форматирования: *, #, -, |, >, `, ~, =
+3. НЕ добавляй никаких символов форматирования: *, #, -, |, >, \`, ~, =
 4. Твой correctedText будет вставлен дословно в файл .docx — там НЕТ рендерера markdown. Любой markdown-символ отобразится как мусор: **, #, - и т.д. будут видны как есть. Markdown там просто не работает — не пытайся его использовать
 5. Шаблон сам отформатирует документ — твоя задача только текст
 
@@ -144,33 +144,4 @@ ${typeInstructions[documentType] || typeInstructions.sluzhebnaya}
 ${userText}`;
 }
 
-/**
- * Fix prompt for Typst compilation errors.
- *
- * Sends the broken section ± context lines to the AI,
- * which returns ONLY the corrected Typst fragment.
- *
- * @param errorLine - The line number where the error occurred
- * @param compileError - The full error message from Typst
- * @param broken - The broken section of Typst content with surrounding context
- * @param startLine - The line number where the broken section starts
- * @returns The complete prompt string
- */
-export function getFixPrompt(
-  errorLine: number,
-  compileError: string,
-  broken: string,
-  startLine: number,
-): string {
-  return `You are fixing a Typst compilation error. The error occurred at line ${errorLine}.
 
-Error message:
-${compileError}
-
-Context around the error (lines ${startLine}–${startLine + broken.split('\n').length - 1}):
-\`\`\`typst
-${broken}
-\`\`\`
-
-Fix ONLY this fragment. Return ONLY the corrected Typst fragment — no comments, no markdown fences, no explanations. Just clean Typst.`;
-}

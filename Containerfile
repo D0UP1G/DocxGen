@@ -22,4 +22,4 @@ USER appuser
 WORKDIR /app
 
 # Default command
-CMD ["opencode", "run", "--agent", "typst-generator", "--format", "json"]
+CMD ["opencode", "run", "--agent", "document-analyst", "--format", "json"]

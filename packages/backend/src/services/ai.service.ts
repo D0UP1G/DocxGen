@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { getMainPrompt, getFixPrompt } from '../prompts/document-prompts.js';
+import { getMainPrompt } from '../prompts/document-prompts.js';
 import type { DocumentTypeId, Requisites } from '../document-types.js';
 
 const CONTAINER_IMAGE = process.env.DOCXGEN_AI_IMAGE || 'docxgen-opencode';
@@ -112,7 +112,7 @@ function parseAiResult(raw: string, userText: string, documentType: DocumentType
   }
 }
 
-function runInContainer(prompt: string, onChunk: (chunk: string) => void, agent = 'typst-generator'): Promise<string> {
+function runInContainer(prompt: string, onChunk: (chunk: string) => void, agent = 'document-analyst'): Promise<string> {
   return new Promise((resolve, reject) => {
     const sessionID = `ses_${randomBytes(12).toString('hex')}`;
     const proc = spawn(process.env.CONTAINER_RUNTIME || 'podman', [
@@ -164,7 +164,7 @@ function runInContainer(prompt: string, onChunk: (chunk: string) => void, agent 
   });
 }
 
-export async function generateTypstStream(
+export async function generateDocumentStream(
   userText: string,
   documentType: DocumentTypeId,
   onChunk: (chunk: string) => void,
@@ -192,23 +192,4 @@ export async function generateTypstStream(
   }
 }
 
-function parseErrorLine(stderr: string): number | null {
-  const match = stderr.match(/document\.typ:(\d+):/);
-  return match ? Number(match[1]) : null;
-}
 
-function extractBrokenSection(typstContent: string, errorLine: number, contextLines = 10) {
-  const lines = typstContent.split('\n');
-  const start = Math.max(0, errorLine - 1 - contextLines);
-  const end = Math.min(lines.length, errorLine + contextLines);
-  return { before: lines.slice(0, start).join('\n'), broken: lines.slice(start, end).join('\n'), after: lines.slice(end).join('\n'), startLine: start + 1 };
-}
-
-export async function patchTypstErrors(typstContent: string, compileError: string, onChunk: (chunk: string) => void): Promise<string> {
-  const errorLine = parseErrorLine(compileError);
-  if (!errorLine) throw new Error(`Cannot parse error line from: ${compileError}`);
-  const { before, broken, after, startLine } = extractBrokenSection(typstContent, errorLine);
-  const fixed = await runInContainer(getFixPrompt(errorLine, compileError, broken, startLine), onChunk);
-  const clean = fixed.replace(/^```typst\s*/im, '').replace(/```\s*$/m, '').trim();
-  return [before, clean, after].filter(Boolean).join('\n');
-}

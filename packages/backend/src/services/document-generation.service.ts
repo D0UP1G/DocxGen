@@ -1,5 +1,5 @@
 import type { DocumentTypeId, Requisites } from '../document-types.js';
-import { generateTypstStream, type AiProcessedDocument } from './ai.service.js';
+import { generateDocumentStream, type AiProcessedDocument } from './ai.service.js';
 import { generateDocx, type DocxDocumentData } from './docx.service.js';
 import { validateRequisites, type ValidationResult } from './validation.service.js';
 
@@ -42,7 +42,7 @@ export async function processDraft(
   documentType: DocumentTypeId,
   onAiChunk?: (chunk: string) => void,
 ): Promise<ProcessedDraft> {
-  const ai = await generateTypstStream(text, documentType, onAiChunk || (() => undefined));
+  const ai = await generateDocumentStream(text, documentType, onAiChunk || (() => undefined));
   const validation = validateRequisites(ai.requisites, documentType, ai.correctedText);
   return {
     originalText: text,

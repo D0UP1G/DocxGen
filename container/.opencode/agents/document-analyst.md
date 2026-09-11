@@ -1,5 +1,5 @@
 ---
-name: typst-generator
+name: document-analyst
 description: Extracts and improves Russian business documents as structured JSON
 model: opencode/mimo-v2.5-free
 tools:

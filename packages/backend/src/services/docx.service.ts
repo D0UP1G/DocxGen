@@ -1,5 +1,4 @@
 import { deflateRawSync } from 'node:zlib';
-import { randomBytes } from 'node:crypto';
 import type { DocumentTypeId, Requisites } from '../document-types.js';
 
 export interface DocxDocumentData {
@@ -222,7 +221,4 @@ export function generateDocx(data: DocxDocumentData): Buffer {
   return buildZip(entries);
 }
 
-export function makeDocxFilename(data: Pick<DocxDocumentData, 'documentType' | 'templateId'>): string {
-  const suffix = randomBytes(3).toString('hex');
-  return `${data.documentType}-${data.templateId}-${suffix}.docx`;
-}
+
