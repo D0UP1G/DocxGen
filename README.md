@@ -32,13 +32,49 @@ cp .env.example .env
 pnpm dev
 ```
 
-Server starts at http://localhost:3000
+Server starts at http://localhost:3000. With `LOCAL_CHAT=1` (default in `.env.example`) the bot dialog
+is available in the browser at http://localhost:3000/dev/chat — no messenger tokens required.
+
+### AI provider
+
+| `AI_PROVIDER` | What you need |
+|---|---|
+| `opencode` | OpenCode CLI — free OpenCode Zen models, no API key: `npm i -g opencode-ai`, then `pnpm opencode:check` |
+| `openai-compat` | `AI_BASE_URL` + `AI_MODEL` (Ollama, vLLM, cloud OpenAI-compatible API) |
+| `mock` | Nothing — the text is not corrected; used by tests and for a quick path to DOCX |
+
+Free OpenCode models answer in 25–90 s and do not accept parallel requests from one address,
+so calls are serialized (`OPENCODE_MAX_PARALLEL=1`).
 
 ### Run with Docker (Optional)
 
 ```bash
 docker compose up
 ```
+
+## Bots (MAX, VK)
+
+Both bots run inside the same backend process and share the dialog engine, AI pipeline, requisites
+validation and DOCX generator with the web client — only the transport differs.
+
+| Platform | Local (no domain) | Server |
+|---|---|---|
+| VK | `VK_MODE=longpoll` | `VK_MODE=callback` + HTTPS webhook |
+| MAX | `MAX_MODE=polling` | `MAX_MODE=webhook` + HTTPS on port 443 |
+
+Enable a bot with `VK_ENABLED=1` / `MAX_ENABLED=1` and the token in `.env`, then run `pnpm dev`.
+Step-by-step setup (community settings, access rights, tokens, webhooks): [docs/bots-setup.md](docs/bots-setup.md).
+
+MAX note: the MAX API runs on a certificate of the Russian Ministry of Digital Development CA, which is
+missing from the Node.js and Windows trust stores. The root certificate ships in
+`packages/backend/certs/` and is trusted **inside this process only** (`MAX_CA_FILE`), the system store is untouched.
+
+## Local stand (/dev/chat)
+
+A messenger emulator for development: the same dialog as in MAX and VK, plus
+demo drafts, `/ai_fail` (simulated AI outage), simulated file-delivery failure,
+the AI processing log and a second user for isolation checks. Enable with `LOCAL_CHAT=1`
+(never on a public server — the stand has no authentication).
 
 ## Architecture
 
@@ -104,8 +140,14 @@ Key environment variables:
 | `AI_TEMPERATURE` | AI temperature | 0.1 |
 | `AI_TIMEOUT_MS` | AI request timeout | 90000 |
 | `AI_FAULT` | Simulate AI failures | off |
+| `LOCAL_CHAT` | Local stand at /dev/chat | 0 |
+| `OPENCODE_MODEL` | Override the model of the doc-editor agent | (agent default) |
+| `OPENCODE_MAX_PARALLEL` | Parallel AI calls (free models allow 1) | 1 |
 | `MAX_ENABLED` | Enable MAX bot | 0 |
+| `MAX_MODE` | polling (local) or webhook (server) | webhook |
+| `MAX_CA_FILE` | Ministry of Digital Development root CA for the MAX API | certs/russian_trusted_root_ca.pem |
 | `VK_ENABLED` | Enable VK bot | 0 |
+| `VK_MODE` | longpoll (local) or callback (server) | callback |
 | `CLEANUP_ENABLED` | Enable automatic cleanup | 1 |
 
 Full list: see [.env.example](.env.example)
@@ -138,6 +180,7 @@ pnpm build         # Build project
 ## Documentation
 
 - [API Reference](docs/api.md) — Full REST API documentation
+- [Bots setup](docs/bots-setup.md) — VK community and MAX bot, step by step (in Russian)
 - [Integration Guide](docs/integration-guide.md) — Practical examples for web, bot, and third-party integrations
 - [Architecture](plan-backend.md) — Detailed backend architecture and design decisions
 

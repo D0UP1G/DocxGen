@@ -47,10 +47,16 @@ DomainError.UNKNOWN_TYPE = (msg = 'Неизвестный тип докумен�
   new DomainError('UNKNOWN_TYPE', msg, 400);
 
 export class AiUnavailableError extends Error {
+  /**
+   * @param {string} message
+   * @param {Error|{ retryable?: boolean }} [cause] - pass { retryable: false } to stop the queue
+   *   from retrying (used by the simulated outage, otherwise the retry hides the error from the user)
+   */
   constructor(message = 'ИИ-сервис временно недоступен', cause) {
     super(message, { cause });
     this.name = 'AiUnavailableError';
     this.status = 503;
+    this.retryable = cause?.retryable !== false;
   }
 }
 

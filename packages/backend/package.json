@@ -5,7 +5,13 @@
   "scripts": {
     "dev": "node --env-file-if-exists=../../.env --watch src/server.js",
     "start": "node src/server.js",
-    "test": "vitest run"
+    "test": "vitest run",
+    "eval": "node --env-file-if-exists=../../.env scripts/eval.js",
+    "opencode:check": "node --env-file-if-exists=../../.env scripts/opencode-check.js",
+    "opencode:build": "docker build -t doc3steps-opencode opencode",
+    "max:subscribe": "node --env-file-if-exists=../../.env scripts/max-subscribe.js",
+    "max:poll": "node --env-file-if-exists=../../.env scripts/max-poll.js",
+    "vk:poll": "node --env-file-if-exists=../../.env scripts/vk-poll.js"
   },
   "dependencies": {
     "better-sqlite3": "^12",
@@ -14,7 +20,8 @@
     "express": "^5",
     "pino": "^9",
     "pino-http": "^10",
-    "zod": "^4"
+    "zod": "^4",
+    "vk-io": "^4"
   },
   "devDependencies": {
     "jszip": "^3",

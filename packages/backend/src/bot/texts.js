@@ -13,10 +13,12 @@
  * Welcome message shown on /start or first interaction.
  * @returns {{ text: string, buttons: string[][] }}
  */
-export function greeting() {
+export function greeting(profile = null) {
+  const name = [profile?.firstName, profile?.lastName].filter(Boolean).join(' ');
   return {
     text: [
-      'Здравствуйте! Я помогу оформить служебный документ за 3 шага:',
+      name ? `Здравствуйте, ${name}! Я помогу оформить служебный документ за 3 шага:`
+           : 'Здравствуйте! Я помогу оформить служебный документ за 3 шага:',
       '1) пришлите черновик,',
       '2) выберите тип и шаблон,',
       '3) получите готовый файл Word.',
@@ -205,6 +207,30 @@ export function deliveryError() {
  */
 export function staleButton() {
   return 'Эта кнопка относится к предыдущему шагу.';
+}
+
+/**
+ * Help message — how the bot works and which commands exist.
+ * @returns {string}
+ */
+export function help() {
+  return [
+    'Как это работает:',
+    '1) пришлите черновик текстом — можно несколькими сообщениями;',
+    '2) выберите тип документа и шаблон оформления;',
+    '3) ответьте на вопросы о реквизитах — или пропустите их;',
+    '4) получите DOCX и при желании смените шаблон одной кнопкой.',
+    '',
+    'Команды: /start — начать заново, /new — новый документ, /help — эта справка.',
+  ].join('\n');
+}
+
+/**
+ * Confirmation that the simulated AI outage is armed (/ai_fail, scenario 6).
+ * @returns {string}
+ */
+export function aiFaultArmed() {
+  return 'Режим проверки: следующая обработка завершится имитацией сбоя ИИ.';
 }
 
 /**

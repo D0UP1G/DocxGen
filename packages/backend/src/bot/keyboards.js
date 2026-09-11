@@ -80,12 +80,15 @@ export function fieldKeyboard(stateVersion = 0) {
  */
 export function resultKeyboard(stateVersion = 0) {
   return [
-    [{ label: 'Отправить', action: encode({ a: 'deliver', r: stateVersion }) }],
     [
       { label: 'Другой шаблон', action: encode({ a: 'other_template', r: stateVersion }) },
       { label: 'Другой тип', action: encode({ a: 'other_type', r: stateVersion }) },
     ],
-    [{ label: 'Изменить текст', action: encode({ a: 'edit_text', r: stateVersion }) }],
+    [
+      { label: 'Показать текст', action: encode({ a: 'show_draft', r: stateVersion }) },
+      { label: 'Изменить текст', action: encode({ a: 'edit_text', r: stateVersion }) },
+    ],
+    [{ label: 'Новый документ', action: encode({ a: 'new', r: stateVersion }) }],
   ];
 }
 

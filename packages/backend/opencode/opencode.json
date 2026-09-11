@@ -1,0 +1,11 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {},
+  "plugin": [],
+  "default_agent": "doc-editor",
+  "permission": {
+    "edit": "deny",
+    "webfetch": "deny",
+    "bash": { "*": "deny" }
+  }
+}

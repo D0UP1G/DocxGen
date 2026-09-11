@@ -102,10 +102,12 @@ export function mergeRequisites({ docType, template, aiFields, title, userFields
  * @returns {string}
  */
 function formatDate(isoDate, format) {
+  // UTC-геттеры: 'YYYY-MM-DD' разбирается как полночь UTC, и в часовых поясах западнее Гринвича
+  // локальные getDate()/getMonth() дали бы предыдущий день.
   const d = new Date(isoDate);
-  const day = String(d.getDate()).padStart(2, '0');
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const year = String(d.getFullYear());
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const year = String(d.getUTCFullYear());
 
   return format
     .replace('DD', day)

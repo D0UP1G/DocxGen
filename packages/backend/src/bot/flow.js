@@ -44,7 +44,7 @@ function textOf(result) {
  * @param {{ documentService: object, docTypes: object, templates: object, log: object }} deps
  * @returns {{ handle: function, onDocumentEvent: function, onDeliveryFailed: function }}
  */
-export function createFlow({ documentService, docTypes, templates, log }) {
+export function createFlow({ documentService, docTypes, templates, faultManager, debugCommands = false, log }) {
   return {
     /**
      * Handle an inbound event and return replies.
@@ -55,27 +55,35 @@ export function createFlow({ documentService, docTypes, templates, log }) {
     async handle(conversation, event) {
       // ── Global commands (work from any state) ─────────────────────────────
 
-      // /start or greeting text → show welcome
-      if (event.kind === 'command' || (event.kind === 'text' && /^(начать|\/start)$/i.test(event.text))) {
-        return [{ text: textOf(texts.greeting()), buttons: keyboards.mainKeyboard(conversation.stateVersion), format: 'markdown' }];
+      // ── Commands ────────────────────────────────────────────────────
+      if (event.kind === 'command') {
+        if (event.command === 'help') {
+          return [{ text: textOf(texts.help()), buttons: this._currentKeyboard(conversation) }];
+        }
+        // Scenario 6: simulate an AI outage for this user only (guarded by DEBUG_COMMANDS)
+        if (event.command === 'ai_fail') {
+          if (!debugCommands) return [{ text: 'Эта команда отключена.' }];
+          faultManager?.armOnce(`${event.platform}:${event.userId}`);
+          return [{ text: textOf(texts.aiFaultArmed()), buttons: this._currentKeyboard(conversation) }];
+        }
+        if (event.command === 'new') return this._startDocument(conversation, event);
+
+        // /start — back to the welcome screen
+        conversation.state = 'idle';
+        conversation.stateVersion++;
+        return [{ text: textOf(texts.greeting(conversation.profile)), buttons: keyboards.mainKeyboard(conversation.stateVersion) }];
       }
 
-      // "Новый документ" from any state (text)
-      if (event.kind === 'text' && /^(новый документ)$/i.test(event.text)) {
-        const doc = documentService.create({ platform: event.platform, id: event.userId });
-        conversation.documentId = doc.id;
-        conversation.state = 'collecting';
+      // "Начать" / "/start" typed as plain text
+      if (event.kind === 'text' && /^(начать|\/start)$/i.test(event.text)) {
+        conversation.state = 'idle';
         conversation.stateVersion++;
-        return [{ text: 'Новый документ создан. Пришлите текст черновика.', buttons: keyboards.draftKeyboard(conversation.stateVersion) }];
+        return [{ text: textOf(texts.greeting(conversation.profile)), buttons: keyboards.mainKeyboard(conversation.stateVersion) }];
       }
 
-      // "Создать документ" button action (from any state)
-      if (event.kind === 'action' && event.action?.a === 'new') {
-        const doc = documentService.create({ platform: event.platform, id: event.userId });
-        conversation.documentId = doc.id;
-        conversation.state = 'collecting';
-        conversation.stateVersion++;
-        return [{ text: 'Новый документ создан. Пришлите текст черновика.', buttons: keyboards.draftKeyboard(conversation.stateVersion) }];
+      // "Новый документ" from any state (typed or pressed)
+      if ((event.kind === 'text' && /^(новый документ)$/i.test(event.text)) || (event.kind === 'action' && event.action?.a === 'new')) {
+        return this._startDocument(conversation, event);
       }
 
       // ── State-based handling ──────────────────────────────────────────────
@@ -140,7 +148,8 @@ export function createFlow({ documentService, docTypes, templates, log }) {
         }
         if (event.action?.a === 'show_draft') {
           const doc = documentService.get(owner, conversation.documentId);
-          return [{ text: `Черновик (${doc.sourceText.length} символов):\n\n${doc.sourceText.slice(0, 2000)}` }];
+          // The keyboard is repeated: in MAX the pressed message loses its buttons and the user would be stuck
+          return [{ text: `Черновик (${doc.sourceText.length} символов):\n\n${doc.sourceText.slice(0, 2000)}`, buttons: keyboards.draftKeyboard(conversation.stateVersion) }];
         }
         if (event.action?.a === 'replace_mode') {
           conversation.ctx = { ...conversation.ctx, inputMode: 'replace' };
@@ -243,7 +252,7 @@ export function createFlow({ documentService, docTypes, templates, log }) {
 
       if (event.kind === 'action' && event.action?.a === 'show_draft') {
         const doc = documentService.get(owner, conversation.documentId);
-        return [{ text: `Черновик:\n\n${doc.sourceText.slice(0, 2000)}` }];
+        return [{ text: `Черновик:\n\n${doc.sourceText.slice(0, 2000)}`, buttons: keyboards.retryKeyboard(conversation.stateVersion) }];
       }
 
       if (event.kind === 'action' && event.action?.a === 'new') {
@@ -328,7 +337,16 @@ export function createFlow({ documentService, docTypes, templates, log }) {
     },
 
     _handleDelivering(conversation, event) {
-      // Shouldn't receive user events in this state — processing is async
+      // "Отправить ещё раз" — the same file, without AI and without re-rendering
+      if (event.kind === 'action' && event.action?.a === 'resend' && conversation.lastFileId) {
+        conversation.state = 'ready';
+        conversation.stateVersion++;
+        return [
+          { text: 'Отправляю файл ещё раз.', buttons: keyboards.resultKeyboard(conversation.stateVersion) },
+          { file: { fileId: conversation.lastFileId, caption: 'Документ' } },
+        ];
+      }
+      // Otherwise the user is simply waiting for the async render
       return [];
     },
 
@@ -358,7 +376,8 @@ export function createFlow({ documentService, docTypes, templates, log }) {
       if (event.kind === 'action' && event.action?.a === 'show_draft') {
         const doc = documentService.get(owner, conversation.documentId);
         if (doc.version) {
-          return [{ text: `Исправленный текст:\n\n${doc.version.body.join('\n\n')}` }];
+          const text = [doc.version.title, ...doc.version.body].filter(Boolean).join('\n\n');
+          return [{ text: `Исправленный текст:\n\n${text}`, buttons: keyboards.resultKeyboard(conversation.stateVersion) }];
         }
       }
 
@@ -385,7 +404,44 @@ export function createFlow({ documentService, docTypes, templates, log }) {
       return [];
     },
 
-    // ── Internal helpers ──────────────────────────────────────────────────
+    // ── Internal helpers ──────────────────────────────────────────────
+
+    /**
+     * Create a new document and switch to draft collection.
+     * @param {object} conversation
+     * @param {object} event - InboundEvent (carries platform and userId)
+     * @returns {Array}
+     */
+    _startDocument(conversation, event) {
+      const doc = documentService.create({ platform: event.platform, id: event.userId });
+      conversation.documentId = doc.id;
+      conversation.lastFileId = null;
+      conversation.pendingField = null;
+      conversation.state = 'collecting';
+      conversation.stateVersion++;
+      return [{ text: textOf(texts.collectDraftStart()), buttons: keyboards.draftKeyboard(conversation.stateVersion) }];
+    },
+
+    /**
+     * Keyboard of the current step — appended to informational replies (/help, /ai_fail)
+     * so the user always has something to press.
+     * @param {object} conversation
+     * @returns {Array|undefined}
+     */
+    _currentKeyboard(conversation) {
+      switch (conversation.state) {
+        case 'idle': return keyboards.mainKeyboard(conversation.stateVersion);
+        case 'collecting': return keyboards.draftKeyboard(conversation.stateVersion);
+        case 'choose_type': return keyboards.typeKeyboard(docTypes.list(), conversation.stateVersion);
+        case 'choose_template': return keyboards.templateKeyboard(templates.list(), conversation.stateVersion);
+        case 'asking_field': return keyboards.fieldKeyboard(conversation.stateVersion);
+        case 'confirm_warnings': return keyboards.warningKeyboard(conversation.stateVersion);
+        case 'ai_failed': return keyboards.retryKeyboard(conversation.stateVersion);
+        case 'delivery_failed': return keyboards.resendKeyboard(conversation.stateVersion);
+        case 'ready': return keyboards.resultKeyboard(conversation.stateVersion);
+        default: return undefined;
+      }
+    },
 
     /**
      * Render document and return file reply.
@@ -397,6 +453,7 @@ export function createFlow({ documentService, docTypes, templates, log }) {
     async _doRender(conversation, owner) {
       try {
         const { file, fallback: fallbackId, placeholders } = await documentService.render(owner, conversation.documentId);
+        conversation.lastFileId = file.id; // for "Отправить ещё раз"
         conversation.state = 'ready';
         conversation.stateVersion++;
         const doc = documentService.get(owner, conversation.documentId);
@@ -453,7 +510,8 @@ export function createFlow({ documentService, docTypes, templates, log }) {
      * @returns {Promise<Array>}
      */
     async onDocumentEvent(conversation, event) {
-      const owner = { platform: conversation.platform, id: conversation.peerId };
+      // Owner is the user, not the chat: in MAX the chat id and the user id are different numbers.
+      const owner = { platform: conversation.platform, id: conversation.userId ?? conversation.peerId };
 
       if (event.type === 'processed') {
         const doc = documentService.get(owner, conversation.documentId);

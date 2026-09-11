@@ -24,6 +24,13 @@
  */
 
 import { events } from '../core/events.js';
+import { sendReplies } from './sendReplies.js';
+
+/** Synthetic event for adapters: file delivery is idempotent per trigger event id. */
+const systemEvent = (conv, kind, documentId) => ({
+  platform: conv.platform, peerId: conv.peerId, userId: conv.userId ?? conv.peerId,
+  eventId: `document:${documentId}:${kind}:${Date.now()}`, kind: 'system', meta: {},
+});
 
 /**
  * Create the notifier.
@@ -43,7 +50,7 @@ export function createNotifier({ dispatcher, flow, adapters, log }) {
       if (replies.length > 0) {
         const adapter = adapters.get(conv.platform);
         if (adapter) {
-          await adapter.send(conv.peerId, replies, {});
+          await sendReplies({ adapter, flow, conversation: conv, replies, event: systemEvent(conv, 'processed', documentId) });
         } else {
           log.warn({ platform: conv.platform }, 'no adapter for platform');
         }
@@ -67,7 +74,7 @@ export function createNotifier({ dispatcher, flow, adapters, log }) {
       if (replies.length > 0) {
         const adapter = adapters.get(conv.platform);
         if (adapter) {
-          await adapter.send(conv.peerId, replies, {});
+          await sendReplies({ adapter, flow, conversation: conv, replies, event: systemEvent(conv, 'failed', documentId) });
         } else {
           log.warn({ platform: conv.platform }, 'no adapter for platform');
         }

@@ -15,7 +15,9 @@ import path from 'node:path';
  */
 export function createCleanupHandler({ db, dataDir, log, env }) {
   return function cleanup() {
-    if (env.CLEANUP_ENABLED !== '1') return;
+    // Схема окружения отдаёт булево значение, но обработчик можно вызвать и с сырым process.env
+    const enabled = env.CLEANUP_ENABLED === true || env.CLEANUP_ENABLED === '1' || env.CLEANUP_ENABLED === 'true';
+    if (!enabled) return;
 
     const now = new Date();
     let totalRemoved = 0;
