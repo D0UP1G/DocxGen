@@ -53,12 +53,16 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
  * @param {{ db?: object, log?: object }} [options]
  */
 export function createRuntime(config = env, { db: passedDb, log: logger = log } = {}) {
-  const db = passedDb ?? openDb(path.resolve(config.DATA_DIR, 'app.sqlite'), { log: logger });
+  // DATA_DIR may be configured relatively. Resolve it once so the database,
+  // storage and cleanup worker always operate on the same directory regardless
+  // of the process working directory.
+  const dataDir = path.resolve(config.DATA_DIR);
+  const db = passedDb ?? openDb(path.join(dataDir, 'app.sqlite'), { log: logger });
 
   const docTypes = loadDocTypes(path.join(ROOT, 'config/doc-types'), logger);
   const templates = loadTemplates(path.join(ROOT, 'config/templates'), logger);
   const queue = createQueue(db);
-  const fileStorage = createFileStorage(config.DATA_DIR);
+  const fileStorage = createFileStorage(dataDir);
   const documentService = createDocumentService({ db, queue, fileStorage, docTypes, templates, renderDocx, log: logger });
 
   const provider = createAiProvider(config);
@@ -66,7 +70,7 @@ export function createRuntime(config = env, { db: passedDb, log: logger = log } 
 
   const handlers = {
     process: createProcessDocumentHandler({ documentService, processDraft, docTypes, provider, faultManager, log: logger }),
-    cleanup: createCleanupHandler({ db, dataDir: config.DATA_DIR, log: logger, env: config }),
+    cleanup: createCleanupHandler({ db, dataDir, log: logger, env: config }),
   };
   const worker = startWorker({ db, queue, handlers, log: logger });
 

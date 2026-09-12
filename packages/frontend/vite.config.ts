@@ -6,9 +6,7 @@ import path from 'path'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
-    proxy: {
-      '/api': 'http://localhost:3001',
-    },
+      proxy: { '/api': 'http://localhost:3001', '/health': 'http://localhost:3001' },
   },
   resolve: {
     alias: {

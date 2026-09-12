@@ -37,9 +37,9 @@ export function DocumentGenerator() {
   );
 
   const visibleFields = useMemo(() => {
-    if (documentType === 'informacionnaya') return ['from', 'date', 'subject', 'signature', 'executor'];
-    if (documentType === 'pismo') return ['to', 'from', 'position', 'date', 'number', 'subject', 'signature', 'greeting', 'executor'];
-    return ['to', 'from', 'position', 'date', 'number', 'subject', 'signature', 'executor'];
+    if (documentType === 'reference') return ['authorPosition', 'authorName', 'addressee', 'period'];
+    if (documentType === 'letter') return ['addresseeOrg', 'addresseePerson', 'addresseeAddress', 'signerPosition', 'signerName', 'executor'];
+    return ['addressee', 'authorPosition', 'authorName', 'number'];
   }, [documentType]);
 
   const currentStep = correctedText ? 2 : 1;
@@ -57,8 +57,8 @@ export function DocumentGenerator() {
 
   const handleProcess = useCallback(() => {
     if (!text.trim()) return;
-    dispatch(processText({ text, documentType }));
-  }, [dispatch, text, documentType]);
+    dispatch(processText({ text, documentType, templateId }));
+  }, [dispatch, text, documentType, templateId]);
 
   const handleGenerate = useCallback(() => {
     if (!text.trim() || !correctedText.trim()) return;
