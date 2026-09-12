@@ -28,7 +28,7 @@ import { renderDocx } from './docx/render.js';
 import { createAiProvider } from './ai/provider.js';
 import { AiFaultManager } from './ai/faults.js';
 import { processDraft } from './ai/processDraft.js';
-import { createDocumentServiceClient } from './client/index.js';
+import { createDirectDocuments } from './client/directClient.js';
 import { createFlow } from './bot/flow.js';
 import { createDispatcher } from './bot/dispatcher.js';
 import { createNotifier } from './bot/notifier.js';
@@ -74,11 +74,9 @@ export function createRuntime(config = env, { db: passedDb, log: logger = log } 
   };
   const worker = startWorker({ db, queue, handlers, log: logger });
 
-  // Create the REST client for the Document Service.
-  const docServiceClient = createDocumentServiceClient({
-    baseUrl: config.DOCUMENT_SERVICE_URL,
-    apiKey: config.API_KEY,
-  });
+  // In-process repository for the dialog flow: the doc worker and the API live in
+  // the same process, so the flow talks to documentService directly (no HTTP :3001).
+  const docServiceClient = createDirectDocuments(documentService);
 
   const flow = createFlow({ docServiceClient, docTypes, templates, faultManager, debugCommands: config.DEBUG_COMMANDS, log: logger });
   const adapters = new Map();

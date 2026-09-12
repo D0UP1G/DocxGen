@@ -102,16 +102,23 @@ export const generateDocument = createAsyncThunk<
 >(
   'document/generateDocument',
   async (
-    { text, correctedText, requisites, documentType, templateId },
+    { text: _text, correctedText, requisites, documentType: _documentType, templateId: _templateId },
     { getState, rejectWithValue },
   ) => {
     try {
       let documentId = (getState() as { document: DocumentState }).document.documentId;
       if (!documentId) return rejectWithValue('Документ ещё не создан');
 
+      // Keep the AI-derived title ("О …") instead of overwriting it with a placeholder.
+      const currentResponse = await fetch(`/api/documents/${documentId}`, { credentials: 'include' });
+      const current = currentResponse.ok
+        ? (await currentResponse.json()) as import('@/types/document').DocumentView
+        : null;
+      const title = current?.version?.title || 'Документ';
+
       const textResponse = await fetch(`/api/documents/${documentId}/text`, {
         method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: 'Документ', body: correctedText.split(/\r?\n/).filter(Boolean) }),
+        body: JSON.stringify({ title, body: correctedText.split(/\r?\n/).filter(Boolean) }),
       });
       if (!textResponse.ok) return rejectWithValue(await getErrorMessage(textResponse));
       const fieldsResponse = await fetch(`/api/documents/${documentId}/fields`, {
@@ -231,6 +238,7 @@ const documentSlice = createSlice({
       .addCase(generateDocument.rejected, (state, action) => {
         state.generating = false;
         state.error = action.payload ?? 'Unknown error';
+        state.status = '';
       });
   },
 });

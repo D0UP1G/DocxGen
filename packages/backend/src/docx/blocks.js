@@ -159,8 +159,12 @@ function dateNumber(model) {
  */
 function title(model) {
   const cfg = model.template.blocks.title;
-  const runs = model.title
-    ? [new TextRun({ text: `О ${model.title}`, bold: cfg.bold, italics: cfg.italic })]
+  // Some providers (mock) already return a title prefixed with "О " — do not double it.
+  const titleText = model.title && !/^о\s/i.test(model.title.trim())
+    ? `О ${model.title}`
+    : model.title;
+  const runs = titleText
+    ? [new TextRun({ text: titleText, bold: cfg.bold, italics: cfg.italic })]
     : [new TextRun({ text: 'О ', bold: cfg.bold, italics: cfg.italic }), ...valueRuns(model, 'title')];
   return [new Paragraph({
     alignment: ALIGN[cfg.align],

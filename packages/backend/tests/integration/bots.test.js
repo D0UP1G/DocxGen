@@ -93,6 +93,7 @@ describe('bots end-to-end (local stand)', () => {
   });
 
   it('keeps the draft and offers a retry when the AI fails (/ai_fail)', async () => {
+    // Две итерации нотификатора (по 5 с) — сбой и повторная обработка — не влезают в дефолтные 10 с.
     const bot = startBot();
 
     await bot.send('Прошу согласовать отпуск с 1 октября.');
@@ -112,7 +113,7 @@ describe('bots end-to-end (local stand)', () => {
 
     await bot.press('Повторить');
     await bot.waitFor((s) => ['asking_field', 'ready'].includes(s.state.state), 8000);
-  });
+  }, 25000);
 
   it('offers «Отправить ещё раз» without reprocessing when the file cannot be sent', async () => {
     const bot = startBot();

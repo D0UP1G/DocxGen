@@ -46,6 +46,12 @@ DomainError.NOT_READY = (msg = 'Документ ещё не обработан'
 DomainError.UNKNOWN_TYPE = (msg = 'Неизвестный тип документа') =>
   new DomainError('UNKNOWN_TYPE', msg, 400);
 
+DomainError.AUDIO_INVALID = (msg = 'Некорректный аудиофайл') =>
+  new DomainError('AUDIO_INVALID', msg, 400);
+
+DomainError.STT_FAILED = (msg = 'Не удалось распознать речь') =>
+  new DomainError('STT_FAILED', msg, 502);
+
 export class AiUnavailableError extends Error {
   /**
    * @param {string} message

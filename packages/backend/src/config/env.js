@@ -61,6 +61,11 @@ const envSchema = z.object({
   // API Key authentication for Document Service
   API_KEY: z.string().default(''),
   DOCUMENT_SERVICE_URL: z.string().url().default('http://localhost:3001'),
+  AUDIO_SERVICE_PORT: z.coerce.number().default(3005),
+  AUDIO_MAX_BYTES: z.coerce.number().int().positive().default(25 * 1024 * 1024),
+  VOSK_MODEL_PATH: z.string().default('./models/vosk-model-small-ru-0.22'),
+  FFMPEG_BIN: z.string().default('ffmpeg'),
+  VOSK_PYTHON: z.string().default('./.venv-audio/bin/python'),
 
   // Cleanup
   CLEANUP_ENABLED: flag(true),

@@ -105,6 +105,7 @@ export function DocumentGenerator() {
                   onTypeChange={handleTypeChange}
                   onTemplateChange={handleTemplateChange}
                   disabled={processing || generating}
+                  onAudioTranscribed={handleTextChange}
                 />
               </motion.div>
             )}

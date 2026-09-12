@@ -49,6 +49,24 @@ data/
 # Brief for GPT-6
 TODO_PROMPTS.md
 
+# GPT Sol & AI agent configs/state
+.gpt-sol/
+.gpt-sol*
+.sol/
+.sol*
+sol.config.*
+gpt-sol.config.*
+*.sol.json
+*.sol.yaml
+*.sol.yml
+
+# Vosk models and large downloads
+packages/backend/models/
+__pycache__/
+*.pyc
+
+
+
 # OpenCode CLI runtime files inside the agent config
 packages/backend/opencode/.opencode/node_modules/
 packages/backend/opencode/.opencode/package.json

@@ -77,7 +77,14 @@ export function createNotifier({ dispatcher, flow, adapters, docServiceClient, l
 
     for (const [documentId, info] of trackedDocs) {
       try {
-        const doc = await docServiceClient.getDocument(documentId);
+        // Documents are owned by a user; poll as that owner or the API returns
+        // NOT_FOUND (session owner ≠ bot owner) and bots stay stuck in 'processing'.
+        const conv = dispatcher.findByDocumentId(documentId);
+        const owner = conv ? { platform: conv.platform, id: conv.userId ?? conv.peerId } : null;
+        const client = owner && typeof docServiceClient.withOwner === 'function'
+          ? docServiceClient.withOwner(owner)
+          : docServiceClient;
+        const doc = await client.getDocument(documentId);
         if (!doc) {
           // Document deleted or not found — stop tracking
           trackedDocs.delete(documentId);
