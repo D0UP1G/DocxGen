@@ -4,6 +4,7 @@ FROM node:22-slim
 RUN apt-get update && apt-get install -y \
     curl \
     ca-certificates \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Install opencode via official installer, then copy to /usr/local/bin

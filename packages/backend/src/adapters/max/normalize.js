@@ -30,8 +30,8 @@ export function toInboundEvents(raw) {
     if (update.update_type !== 'message_created') continue;
     const message = update.message ?? update; const body = message.body ?? message; const recipient = message.recipient ?? update.recipient ?? {}; const sender = message.sender ?? update.sender ?? {};
     if ((recipient.chat_type && recipient.chat_type !== 'dialog') || sender.is_bot) continue;
-    const text = body.text ?? ''; const eventId = `m:${body.mid ?? message.mid ?? `${recipient.chat_id}:${message.timestamp ?? update.timestamp ?? Date.now()}`}`; const cmd = command(text);
-    result.push({ platform: 'max', kind: cmd ? 'command' : 'text', ...(cmd ? { command: cmd } : { text }), eventId, peerId: String(recipient.chat_id), userId: String(sender.user_id ?? message.user_id ?? recipient.chat_id), profile: profileOf(sender), meta: { mid: body.mid, chatType: recipient.chat_type } });
+     const text = body.text ?? ''; const eventId = `m:${body.mid ?? message.mid ?? `${recipient.chat_id}:${message.timestamp ?? update.timestamp ?? Date.now()}`}`; const cmd = command(text); const audio = (body.attachments ?? []).find((item) => item.type === 'audio' || item.type === 'voice');
+     result.push({ platform: 'max', kind: audio ? 'audio' : cmd ? 'command' : 'text', ...(audio ? { audio } : cmd ? { command: cmd } : { text }), eventId, peerId: String(recipient.chat_id), userId: String(sender.user_id ?? message.user_id ?? recipient.chat_id), profile: profileOf(sender), meta: { mid: body.mid, chatType: recipient.chat_type } });
   }
   return result;
 }

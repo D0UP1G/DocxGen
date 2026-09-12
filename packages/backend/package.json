@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "start:audio-service": "node --env-file-if-exists=../../.env src/audio-service.js",
+    "setup:audio": "bash scripts/setup-audio.sh",
     "dev": "node --env-file-if-exists=../../.env --watch src/server.js",
     "start": "node --env-file-if-exists=../../.env src/server.js",
     "test": "vitest run",

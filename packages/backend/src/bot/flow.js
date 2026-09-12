@@ -47,7 +47,7 @@ function textOf(result) {
  * @param {{ docServiceClient: object, docTypes: object, templates: object, log: object }} deps
  * @returns {{ handle: function, onDocumentEvent: function, onDeliveryFailed: function, setNotifier: function, trackProcessing: function }}
  */
-export function createFlow({ docServiceClient, docTypes, templates, faultManager, debugCommands = false, log }) {
+export function createFlow({ docServiceClient, docTypes, templates, faultManager, debugCommands = false, log, transcribeAudio }) {
   /**
    * Create an owner-bound client for a specific user.
    * Returns a client with owner headers attached.
@@ -88,6 +88,15 @@ export function createFlow({ docServiceClient, docTypes, templates, faultManager
      * @returns {Promise<Array<{text, buttons?, format?, image?, file?}>>}
      */
     async handle(conversation, event) {
+      // Adapters may attach a downloaded audio buffer. Treat its transcription
+      // exactly like a typed draft, preserving the existing FSM and grounding.
+      if (event.kind === 'audio') {
+        if (typeof transcribeAudio !== 'function' || !event.audio?.buffer) {
+          return [{ text: 'Не удалось получить аудиофайл. Отправьте его ещё раз или введите текст.' }];
+        }
+        const result = await transcribeAudio(event.audio.buffer, { platform: event.platform, ownerId: event.userId });
+        event = { ...event, kind: 'text', text: result.text };
+      }
       // ── Global commands (work from any state) ─────────────────────────────
 
       // ── Commands ────────────────────────────────────────────────────

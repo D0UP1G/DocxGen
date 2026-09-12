@@ -27,10 +27,14 @@ DocxGen takes a rough draft in Russian and transforms it into a properly formatt
 ### Run Locally
 
 ```bash
-pnpm install
+npm install
 cp .env.example .env
-pnpm dev
+npm run dev
 ```
+
+`npm run dev` starts both the document service on port 3001 and the audio
+service on port 3005. `pnpm` is also supported when it is installed, but is not
+required.
 
 Server starts at http://localhost:3000. With `LOCAL_CHAT=1` (default in `.env.example`) the bot dialog
 is available in the browser at http://localhost:3000/dev/chat — no messenger tokens required.

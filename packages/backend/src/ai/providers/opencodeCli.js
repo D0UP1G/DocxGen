@@ -41,11 +41,12 @@ export function parseOpencodeOutput(stdout) {
  */
 export function resolveOpencodeBin(bin, { platform = process.platform, env = process.env, exists = fs.existsSync } = {}) {
   if (platform !== 'win32' || bin !== 'opencode') return bin;
-  const dirs = [env.APPDATA && path.join(env.APPDATA, 'npm'), ...String(env.PATH ?? env.Path ?? '').split(path.delimiter)].filter(Boolean);
+  // path.win32: пути с учётом Windows-семантики, даже когда код выполняется не на Windows (например, в тестах).
+  const dirs = [env.APPDATA && path.win32.join(env.APPDATA, 'npm'), ...String(env.PATH ?? env.Path ?? '').split(path.win32.delimiter)].filter(Boolean);
   for (const dir of dirs) {
-    const exe = path.join(dir, 'node_modules', 'opencode-ai', 'bin', 'opencode.exe');
+    const exe = path.win32.join(dir, 'node_modules', 'opencode-ai', 'bin', 'opencode.exe');
     if (exists(exe)) return exe;
-    if (exists(path.join(dir, 'opencode.exe'))) return path.join(dir, 'opencode.exe');
+    if (exists(path.win32.join(dir, 'opencode.exe'))) return path.win32.join(dir, 'opencode.exe');
   }
   return bin;
 }

@@ -3,8 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently --names backend,web --prefix-colors blue,red \"pnpm --filter @docxgen/backend start\" \"pnpm --filter @docxgen/frontend dev\"",
-    "start": "pnpm --filter @docxgen/backend start",
+    "dev": "concurrently --names backend,audio,web --prefix-colors blue,cyan,red \"npm --prefix packages/backend start\" \"npm --prefix packages/backend run start:audio-service\" \"npm --prefix packages/frontend run dev\"",
+    "start": "concurrently --names backend,audio --prefix-colors blue,cyan \"npm --prefix packages/backend start\" \"npm --prefix packages/backend run start:audio-service\"",
+    "start:audio": "npm --prefix packages/backend run start:audio-service",
     "test": "pnpm --filter @docxgen/backend test",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",

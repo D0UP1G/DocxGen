@@ -76,14 +76,12 @@ function remapKeys(obj) {
 // Main migration function
 async function migrate() {
   const options = parseArgs();
-  
   // Determine database path
   let dbPath = options.dbPath;
   if (!dbPath) {
     // Try to find the database in the default location
     const rootDir = path.resolve(__dirname, '..');
     dbPath = path.join(rootDir, 'data', 'app.sqlite');
-    
     // If not found, try current directory
     if (!fs.existsSync(dbPath)) {
       dbPath = path.join(process.cwd(), 'data', 'app.sqlite');
@@ -111,7 +109,6 @@ async function migrate() {
       // 1. Migrate documents.user_fields
       console.log('📋 Migrating documents.user_fields...');
       const docs = db.prepare('SELECT id, user_fields FROM documents WHERE user_fields != \'{}\'').all();
-      
       let docsMigrated = 0;
       let docsSkipped = 0;
       let docsChanged = 0;
@@ -148,7 +145,6 @@ async function migrate() {
       // 2. Migrate versions.ai_fields
       console.log('📋 Migrating versions.ai_fields...');
       const versions = db.prepare('SELECT id, document_id, ai_fields FROM versions WHERE ai_fields != \'{}\'').all();
-      
       let versionsMigrated = 0;
       let versionsSkipped = 0;
       let versionsChanged = 0;
@@ -210,10 +206,8 @@ async function migrate() {
     if (!options.dryRun) {
       console.log('');
       console.log('🔍 Verifying idempotency (checking if running again would change anything)...');
-      
       const verifyDocs = db.prepare('SELECT id, user_fields FROM documents WHERE user_fields != \'{}\'').all();
       const verifyVersions = db.prepare('SELECT id, ai_fields FROM versions WHERE ai_fields != \'{}\'').all();
-      
       let docsWouldChange = 0;
       let versionsWouldChange = 0;
 
