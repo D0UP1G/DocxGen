@@ -45,7 +45,7 @@ export const processText = createAsyncThunk<
   ProcessResponse,
   { text: string; documentType: DocumentTypeId; templateId: TemplateId },
   { rejectValue: string }
->('document/processText', async ({ text, documentType, templateId }, { rejectWithValue }) => {
+>('document/processText', async ({ text, documentType, templateId }, { getState, rejectWithValue }) => {
   try {
     const response = await fetch('/api/documents', {
       method: 'POST',
@@ -91,11 +91,24 @@ export const processText = createAsyncThunk<
         : `${warning.key ?? 'Реквизит'}: ${warning.reason ?? 'проверка не пройдена'}`
     ));
 
+    // Build a set of auto/registry field keys from the docType so we can
+    // exclude them from the "missing" list — the form already hides those
+    // fields, so the checklist must not list them either.
+    const state = getState() as { document: DocumentState };
+    const docType = state.document.catalog?.docTypes.find((dt) => dt.id === documentType);
+    const hiddenKeys = new Set(
+      (docType?.fields ?? [])
+        .filter((f) => f.kind === 'auto' || f.kind === 'registry')
+        .map((f) => f.key),
+    );
+
     return {
       correctedText: current.version.body.join('\n'),
       requisites: { ...aiRequisites, ...current.userFields },
       validation: {
-        missing: (current.pending ?? []).map(({ key, label }) => ({ field: key, label })),
+        missing: (current.pending ?? [])
+          .filter(({ key }) => !hiddenKeys.has(key))
+          .map(({ key, label }) => ({ field: key, label })),
         warnings,
       },
       source: current.id,
