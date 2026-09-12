@@ -309,6 +309,32 @@ describe('REST API', () => {
       expect(downloadRes.headers['content-type']).toMatch(/wordprocessingml/);
       expect(downloadRes.headers['content-disposition']).toMatch(/attachment/);
     });
+
+    it('does not allow another web session to download the file', async () => {
+      const owner = createClient(app);
+      const stranger = createClient(app);
+      const createRes = await owner.post('/api/documents', {
+        sourceText: 'Закрытый документ', docType: 'memo', templateId: 'classic',
+      });
+      const docId = createRes.body.id;
+      await owner.post(`/api/documents/${docId}/process`, {});
+      documentService.saveVersion({
+        documentId: docId,
+        draftVersion: 1,
+        docType: 'memo',
+        kind: 'ai',
+        title: 'Закрытый документ',
+        body: ['Текст'],
+        aiFields: {},
+        changes: [],
+        warnings: [],
+      });
+      documentService.markProcessed(docId);
+      const renderRes = await owner.post(`/api/documents/${docId}/render`, {});
+
+      const stolen = await stranger.get(renderRes.body.downloadUrl);
+      expect(stolen.status).toBe(404);
+    });
   });
 
   // ── List with pagination ──────────────────────────────────────────────────

@@ -58,13 +58,13 @@ describe('documentSlice reducer', () => {
     });
 
     it('setDocumentType updates documentType', () => {
-      const state = reducer(initialState, setDocumentType('dokladnaya'));
-      expect(state.documentType).toBe('dokladnaya');
+      const state = reducer(initialState, setDocumentType('report'));
+      expect(state.documentType).toBe('report');
     });
 
     it('setTemplateId updates templateId', () => {
-      const state = reducer(initialState, setTemplateId('standard'));
-      expect(state.templateId).toBe('standard');
+      const state = reducer(initialState, setTemplateId('modern'));
+      expect(state.templateId).toBe('modern');
     });
 
     it('setMissingFields updates missingFields', () => {

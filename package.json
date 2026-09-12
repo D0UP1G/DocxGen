@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently --names doc,max,vk,local,web --prefix-colors blue,yellow,magenta,green,red \"pnpm --filter @docxgen/backend start:doc-service\" \"pnpm --filter @docxgen/backend start:max-bot\" \"pnpm --filter @docxgen/backend start:vk-bot\" \"pnpm --filter @docxgen/backend start:local-bot\" \"pnpm --filter @docxgen/frontend dev\"",
-    "start": "pnpm --filter @docxgen/backend start:doc-service",
+    "dev": "concurrently --names backend,web --prefix-colors blue,red \"pnpm --filter @docxgen/backend start\" \"pnpm --filter @docxgen/frontend dev\"",
+    "start": "pnpm --filter @docxgen/backend start",
     "test": "pnpm --filter @docxgen/backend test",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",

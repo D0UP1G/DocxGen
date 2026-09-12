@@ -131,7 +131,7 @@ function mockDocServiceClient() {
   };
 }
 
-const mockLog = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+const mockLog = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 

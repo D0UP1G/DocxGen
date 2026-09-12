@@ -134,7 +134,18 @@ export function createDispatcher({ db, flow, adapters, log }) {
         now: new Date().toISOString(),
       });
 
-      if (result.changes === 0) return null; // Duplicate
+      if (result.changes === 0) {
+        log.debug({ platform: event.platform, eventId: event.eventId }, 'событие уже обработано, пропуск (дубль)');
+        return null; // Duplicate
+      }
+      log.debug({
+        platform: event.platform,
+        eventId: event.eventId,
+        peerId: event.peerId,
+        kind: event.kind,
+        text: event.text,
+        action: event.action,
+      }, 'входящее событие принято');
       return event;
     },
 
@@ -146,6 +157,7 @@ export function createDispatcher({ db, flow, adapters, log }) {
      */
     async run(event, adapter) {
       const lockKey = `${event.platform}:${event.peerId}`;
+      const startedAt = Date.now();
       const release = await locks.acquire(lockKey);
 
       try {
@@ -154,18 +166,34 @@ export function createDispatcher({ db, flow, adapters, log }) {
 
         // Check state_version for button actions (reject stale presses)
         if (event.kind === 'action' && event.action?.r !== conversation.stateVersion) {
+          log.debug({
+            platform: event.platform, peerId: event.peerId,
+            pressed: event.action?.r, current: conversation.stateVersion,
+          }, 'нажата устаревшая кнопка');
           await adapter.send(event.peerId, [{ text: texts.staleButton() }], { event });
           return;
         }
 
         // Handle through flow
+        const stateBefore = conversation.state;
         const replies = await flow.handle(conversation, event);
 
         // Index by documentId after flow mutates conversation
         indexByDocument(conversation);
 
+        log.debug({
+          platform: event.platform,
+          peerId: event.peerId,
+          state: stateBefore === conversation.state ? conversation.state : `${stateBefore} → ${conversation.state}`,
+          documentId: conversation.documentId,
+          pendingField: conversation.pendingField,
+          replies: replies.length,
+          ms: Date.now() - startedAt,
+        }, 'диалог обработан');
+
         if (replies.length > 0) {
           await sendReplies({ adapter, flow, conversation, replies, event });
+          log.debug({ platform: event.platform, peerId: event.peerId, replies: replies.length }, 'ответы отправлены');
         }
 
         markHandled.run(event.platform, event.eventId);
