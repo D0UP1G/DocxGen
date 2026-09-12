@@ -1,25 +1,19 @@
 /**
  * Notifier — bridges document lifecycle events to dialog conversations.
  *
- * When the AI worker finishes processing a document (success or failure),
- * it emits events on the global event bus. The notifier listens for these
- * events, finds the conversation that owns the document, and calls
- * flow.onDocumentEvent() to generate the appropriate replies.
+ * Supports two modes:
+ * 1. EventEmitter (monolith): listens to core/events.js for document.processed/failed
+ * 2. Polling (split architecture): polls Document Service via REST client
  *
- * Why a separate module: the flow handler is synchronous from the user's
- * perspective (handle event → return replies). But document processing is
- * async (queued job). The notifier closes this gap by converting async
- * document events into synchronous flow transitions.
- *
- * Why it's simple: the notifier does ONE thing — bridge events. It doesn't
- * manage state, doesn't handle retries, doesn't know about adapters. It
- * finds the conversation, calls the flow, and lets the dispatcher handle
- * sending replies.
+ * The polling mode is used when the bot service is separated from the
+ * Document Service. It maintains a Set of document IDs to poll and
+ * checks their status periodically.
  *
  * Dependencies are injected (Dependency Inversion):
  *   dispatcher — for findByDocumentId
  *   flow — for onDocumentEvent
  *   adapters — Map<string, Adapter>
+ *   docServiceClient — REST client (for polling mode)
  *   log — pino-compatible logger
  */
 
@@ -34,66 +28,118 @@ const systemEvent = (conv, kind, documentId) => ({
 
 /**
  * Create the notifier.
- * @param {{ dispatcher: object, flow: object, adapters: Map, log: object }} deps
- * @returns {{ stop: function }}
+ * @param {{ dispatcher: object, flow: object, adapters: Map, docServiceClient?: object, log: object, pollIntervalMs?: number }} deps
+ * @returns {{ stop: function, trackDocument: function }}
  */
-export function createNotifier({ dispatcher, flow, adapters, log }) {
-  const onProcessed = async ({ documentId }) => {
+export function createNotifier({ dispatcher, flow, adapters, docServiceClient, log, pollIntervalMs = 5_000 }) {
+  // ── Document tracking for polling mode ──────────────────────────────────
+  const trackedDocs = new Map(); // documentId → { status: string, lastCheck: number }
+
+  /**
+   * Track a document for polling. Called by flow when processing starts.
+   * @param {string} documentId
+   * @param {string} initialStatus — e.g. 'processing'
+   */
+  function trackDocument(documentId, initialStatus = 'processing') {
+    if (!docServiceClient) return; // No polling without REST client
+    trackedDocs.set(documentId, { status: initialStatus, lastCheck: Date.now() });
+    log.debug({ documentId }, 'tracking document for polling');
+  }
+
+  /**
+   * Process a document status change.
+   * @param {string} documentId
+   * @param {'processed'|'failed'} type
+   * @param {string} [reason]
+   */
+  async function handleDocumentEvent(documentId, type, reason) {
     try {
       const conv = dispatcher.findByDocumentId(documentId);
       if (!conv) {
-        log.warn({ documentId }, 'document processed but no conversation found');
+        log.warn({ documentId }, `document ${type} but no conversation found`);
         return;
       }
 
-      const replies = await flow.onDocumentEvent(conv, { type: 'processed', documentId });
+      const replies = await flow.onDocumentEvent(conv, { type, documentId });
       if (replies.length > 0) {
         const adapter = adapters.get(conv.platform);
         if (adapter) {
-          await sendReplies({ adapter, flow, conversation: conv, replies, event: systemEvent(conv, 'processed', documentId) });
+          await sendReplies({ adapter, flow, conversation: conv, replies, event: systemEvent(conv, type, documentId) });
         } else {
           log.warn({ platform: conv.platform }, 'no adapter for platform');
         }
       }
 
-      log.info({ documentId }, 'document processed notification sent');
+      log.info({ documentId }, `document ${type} notification sent`);
     } catch (err) {
-      log.error({ documentId, error: err.message }, 'failed to notify about processed document');
+      log.error({ documentId, error: err.message }, `failed to notify about ${type} document`);
     }
+  }
+
+  // ── EventEmitter mode (for monolith) ─────────────────────────────────────
+  const onProcessed = async ({ documentId }) => {
+    trackedDocs.delete(documentId); // Stop polling if tracked
+    await handleDocumentEvent(documentId, 'processed');
   };
 
   const onFailed = async ({ documentId, reason }) => {
-    try {
-      const conv = dispatcher.findByDocumentId(documentId);
-      if (!conv) {
-        log.warn({ documentId }, 'document failed but no conversation found');
-        return;
-      }
-
-      const replies = await flow.onDocumentEvent(conv, { type: 'failed', documentId });
-      if (replies.length > 0) {
-        const adapter = adapters.get(conv.platform);
-        if (adapter) {
-          await sendReplies({ adapter, flow, conversation: conv, replies, event: systemEvent(conv, 'failed', documentId) });
-        } else {
-          log.warn({ platform: conv.platform }, 'no adapter for platform');
-        }
-      }
-
-      log.info({ documentId, reason }, 'document failure notification sent');
-    } catch (err) {
-      log.error({ documentId, error: err.message }, 'failed to notify about failed document');
-    }
+    trackedDocs.delete(documentId); // Stop polling if tracked
+    await handleDocumentEvent(documentId, 'failed', reason);
   };
 
   events.on('document.processed', onProcessed);
   events.on('document.failed', onFailed);
 
+  // ── Polling loop (for split architecture) ────────────────────────────────
+  let pollTimer = null;
+
+  async function pollTrackedDocuments() {
+    if (trackedDocs.size === 0) return;
+
+    for (const [documentId, info] of trackedDocs) {
+      try {
+        const doc = await docServiceClient.getDocument(documentId);
+        if (!doc) {
+          // Document deleted or not found — stop tracking
+          trackedDocs.delete(documentId);
+          continue;
+        }
+
+        // Status changed from 'processing' to something else
+        if (doc.status !== 'processing' && doc.status !== info.status) {
+          trackedDocs.delete(documentId);
+          const type = doc.status === 'processed' ? 'processed' : 'failed';
+          const reason = doc.status === 'ai_failed' ? doc.error : undefined;
+          await handleDocumentEvent(documentId, type, reason);
+        } else {
+          // Update last check time
+          info.lastCheck = Date.now();
+        }
+      } catch (err) {
+        log.error({ documentId, error: err.message }, 'poll failed for document');
+      }
+    }
+  }
+
+  if (docServiceClient) {
+    pollTimer = setInterval(pollTrackedDocuments, pollIntervalMs);
+    // Don't block the event loop
+    if (pollTimer.unref) pollTimer.unref();
+    log.info({ pollIntervalMs }, 'document polling started');
+  }
+
   return {
-    /** Remove event listeners (for cleanup in tests). */
+    /** Track a document for polling (called by flow when processing starts). */
+    trackDocument,
+
+    /** Remove event listeners and stop polling (for cleanup in tests). */
     stop() {
       events.removeListener('document.processed', onProcessed);
       events.removeListener('document.failed', onFailed);
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
     },
   };
 }

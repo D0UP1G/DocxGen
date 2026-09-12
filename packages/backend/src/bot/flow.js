@@ -19,7 +19,8 @@
  * Every state transition increments stateVersion for stale-button detection.
  *
  * Dependencies are injected (Dependency Inversion):
- *   documentService — document lifecycle CRUD
+ *   docServiceClient — REST client for document lifecycle CRUD (sends owner via headers)
+ *   documentService — (fallback) direct service for monolith mode / backward compat
  *   docTypes — document type catalog (list, get)
  *   templates — template catalog (list, get)
  *   log — pino-compatible logger
@@ -41,11 +42,73 @@ function textOf(result) {
 
 /**
  * Create the dialog flow handler.
- * @param {{ documentService: object, docTypes: object, templates: object, log: object }} deps
- * @returns {{ handle: function, onDocumentEvent: function, onDeliveryFailed: function }}
+ *
+ * Accepts either `docServiceClient` (REST) or `documentService` (direct).
+ * When both are provided, `docServiceClient` takes precedence.
+ *
+ * @param {{ docServiceClient?: object, documentService?: object, docTypes: object, templates: object, log: object }} deps
+ * @returns {{ handle: function, onDocumentEvent: function, onDeliveryFailed: function, setNotifier: function, trackProcessing: function }}
  */
-export function createFlow({ documentService, docTypes, templates, faultManager, debugCommands = false, log }) {
+export function createFlow({ docServiceClient, documentService, docTypes, templates, faultManager, debugCommands = false, log }) {
+  // Determine the active document service interface.
+  // REST mode: use docServiceClient (sends owner via headers).
+  // Direct mode: use documentService (in-process calls with owner parameter).
+  const useRest = !!docServiceClient;
+  const ds = docServiceClient || documentService;
+
+  /**
+   * Create an owner-bound client for a specific user.
+   * REST mode: returns a client with owner headers attached.
+   * Direct mode: returns a proxy that passes owner as the first argument.
+   * @param {{ platform: string, id: string }} owner
+   * @returns {object} client with methods: createDocument, getDocument, setDraft, etc.
+   */
+  function clientFor(owner) {
+    if (useRest) {
+      return docServiceClient.withOwner(owner);
+    }
+    // Direct mode: wrap the documentService to match the REST client interface
+    return {
+      createDocument: () => documentService.create(owner),
+      getDocument: (id) => documentService.get(owner, id),
+      setDraft: (id, text, opts) => documentService.setDraft(owner, id, text, opts),
+      updateDocument: (id, data) => {
+        if (data.docType !== undefined) documentService.setType(owner, id, data.docType);
+        if (data.templateId !== undefined) documentService.setTemplate(owner, id, data.templateId);
+        return documentService.get(owner, id);
+      },
+      processDocument: (id) => documentService.startProcessing(owner, id),
+      retryProcessing: (id) => documentService.retryProcessing(owner, id),
+      renderDocument: (id) => documentService.render(owner, id),
+      setFields: (id, fields) => {
+        for (const [key, value] of Object.entries(fields)) {
+          documentService.setField(owner, id, key, value);
+        }
+        return documentService.get(owner, id);
+      },
+      setManualText: (id, content) => documentService.setManualText(owner, id, content),
+    };
+  }
+
+  // Notifier reference — set after creation to avoid circular dependency
+  let notifier = null;
+
   return {
+    /**
+     * Set the notifier for polling support. Called after creation to avoid circular deps.
+     * @param {object} n — notifier instance with trackDocument method
+     */
+    setNotifier(n) {
+      notifier = n;
+    },
+
+    /**
+     * Track a document for polling when processing starts.
+     * @param {string} documentId
+     */
+    trackProcessing(documentId) {
+      if (notifier) notifier.trackDocument(documentId, 'processing');
+    },
     /**
      * Handle an inbound event and return replies.
      * @param {object} conversation - current conversation state (mutated in place)
@@ -122,9 +185,9 @@ export function createFlow({ documentService, docTypes, templates, faultManager,
       if (event.kind === 'text') {
         // Start new document with this text as draft
         const owner = { platform: event.platform, id: event.userId };
-        const doc = documentService.create(owner);
+        const doc = clientFor(owner).createDocument({});
         conversation.documentId = doc.id;
-        documentService.setDraft(owner, doc.id, event.text, { mode: 'replace' });
+        clientFor(owner).setDraft(doc.id, event.text, { mode: 'replace' });
         conversation.state = 'collecting';
         conversation.stateVersion++;
         return [{ text: `Принято. В черновике ${event.text.length} символов.`, buttons: keyboards.draftKeyboard(conversation.stateVersion) }];
@@ -137,7 +200,7 @@ export function createFlow({ documentService, docTypes, templates, faultManager,
 
       if (event.kind === 'action') {
         if (event.action?.a === 'continue') {
-          const doc = documentService.get(owner, conversation.documentId);
+          const doc = clientFor(owner).getDocument(conversation.documentId);
           if (!doc.sourceText) {
             return [{ text: 'Черновик пуст. Пришлите текст.' }];
           }
@@ -147,7 +210,7 @@ export function createFlow({ documentService, docTypes, templates, faultManager,
           return [{ text: textOf(texts.chooseType(types)), buttons: keyboards.typeKeyboard(types, conversation.stateVersion) }];
         }
         if (event.action?.a === 'show_draft') {
-          const doc = documentService.get(owner, conversation.documentId);
+          const doc = clientFor(owner).getDocument(conversation.documentId);
           // The keyboard is repeated: in MAX the pressed message loses its buttons and the user would be stuck
           return [{ text: `Черновик (${doc.sourceText.length} символов):\n\n${doc.sourceText.slice(0, 2000)}`, buttons: keyboards.draftKeyboard(conversation.stateVersion) }];
         }
@@ -159,10 +222,10 @@ export function createFlow({ documentService, docTypes, templates, faultManager,
 
       if (event.kind === 'text') {
         const mode = conversation.ctx?.inputMode || 'append';
-        documentService.setDraft(owner, conversation.documentId, event.text, { mode });
+        clientFor(owner).setDraft(conversation.documentId, event.text, { mode });
         // Reset to append after replace
         conversation.ctx = { ...conversation.ctx, inputMode: 'append' };
-        const doc = documentService.get(owner, conversation.documentId);
+        const doc = clientFor(owner).getDocument(conversation.documentId);
         return [{ text: `Принято. В черновике ${doc.sourceText.length} символов.`, buttons: keyboards.draftKeyboard(conversation.stateVersion) }];
       }
 
@@ -174,7 +237,7 @@ export function createFlow({ documentService, docTypes, templates, faultManager,
 
       if (event.kind === 'action' && event.action?.a === 'set_type') {
         const typeId = event.action.v;
-        documentService.setType(owner, conversation.documentId, typeId);
+        clientFor(owner).updateDocument(conversation.documentId, { docType: typeId });
         conversation.state = 'choose_template';
         conversation.stateVersion++;
         const tmplList = templates.list();
@@ -189,7 +252,7 @@ export function createFlow({ documentService, docTypes, templates, faultManager,
           t.id === event.text.toLowerCase()
         );
         if (match) {
-          documentService.setType(owner, conversation.documentId, match.id);
+          clientFor(owner).updateDocument(conversation.documentId, { docType: match.id });
           conversation.state = 'choose_template';
           conversation.stateVersion++;
           const tmplList = templates.list();
@@ -212,10 +275,10 @@ export function createFlow({ documentService, docTypes, templates, faultManager,
 
       if (event.kind === 'action' && event.action?.a === 'set_template') {
         const templateId = event.action.v;
-        documentService.setTemplate(owner, conversation.documentId, templateId);
+        clientFor(owner).updateDocument(conversation.documentId, { templateId: templateId });
 
         // Check if version is current (not stale)
-        const doc = documentService.get(owner, conversation.documentId);
+        const doc = clientFor(owner).getDocument(conversation.documentId);
         if (doc.version && !doc.version.stale) {
           // Version is current — render directly without reprocessing
           conversation.state = 'delivering';
@@ -226,7 +289,8 @@ export function createFlow({ documentService, docTypes, templates, faultManager,
         // Need to process with AI
         conversation.state = 'processing';
         conversation.stateVersion++;
-        documentService.startProcessing(owner, conversation.documentId);
+        this.trackProcessing(conversation.documentId);
+        clientFor(owner).processDocument(conversation.documentId);
         return [{ text: textOf(texts.processing()) }];
       }
 
@@ -244,19 +308,20 @@ export function createFlow({ documentService, docTypes, templates, faultManager,
       const owner = { platform: event.platform, id: event.userId };
 
       if (event.kind === 'action' && event.action?.a === 'retry') {
-        documentService.retryProcessing(owner, conversation.documentId);
+        this.trackProcessing(conversation.documentId);
+        clientFor(owner).retryProcessing(conversation.documentId);
         conversation.state = 'processing';
         conversation.stateVersion++;
         return [{ text: 'Повторная обработка...' }];
       }
 
       if (event.kind === 'action' && event.action?.a === 'show_draft') {
-        const doc = documentService.get(owner, conversation.documentId);
+        const doc = clientFor(owner).getDocument(conversation.documentId);
         return [{ text: `Черновик:\n\n${doc.sourceText.slice(0, 2000)}`, buttons: keyboards.retryKeyboard(conversation.stateVersion) }];
       }
 
       if (event.kind === 'action' && event.action?.a === 'new') {
-        const doc = documentService.create(owner);
+        const doc = clientFor(owner).createDocument({});
         conversation.documentId = doc.id;
         conversation.state = 'collecting';
         conversation.stateVersion++;
@@ -271,7 +336,7 @@ export function createFlow({ documentService, docTypes, templates, faultManager,
 
       if (event.kind === 'action' && event.action?.a === 'deliver') {
         // Check if there are pending fields before delivering
-        const doc = documentService.get(owner, conversation.documentId);
+        const doc = clientFor(owner).getDocument(conversation.documentId);
         const { pending } = mergeRequisites({
           docType: docTypes.get(doc.docType),
           template: templates.get(doc.templateId).template,
@@ -300,7 +365,8 @@ export function createFlow({ documentService, docTypes, templates, faultManager,
       if (event.kind === 'action' && event.action?.a === 'retry') {
         conversation.state = 'processing';
         conversation.stateVersion++;
-        documentService.startProcessing(owner, conversation.documentId);
+        this.trackProcessing(conversation.documentId);
+        clientFor(owner).processDocument(conversation.documentId);
         return [{ text: textOf(texts.processing()) }];
       }
 
@@ -317,7 +383,7 @@ export function createFlow({ documentService, docTypes, templates, faultManager,
       const owner = { platform: event.platform, id: event.userId };
 
       if (event.kind === 'action' && event.action?.a === 'skip_field') {
-        documentService.setField(owner, conversation.documentId, conversation.pendingField, null);
+        clientFor(owner).setFields(conversation.documentId, { [conversation.pendingField]: null });
         return this._nextField(conversation, owner);
       }
 
@@ -329,7 +395,7 @@ export function createFlow({ documentService, docTypes, templates, faultManager,
       }
 
       if (event.kind === 'text') {
-        documentService.setField(owner, conversation.documentId, conversation.pendingField, event.text);
+        clientFor(owner).setFields(conversation.documentId, { [conversation.pendingField]: event.text });
         return this._nextField(conversation, owner);
       }
 
@@ -374,7 +440,7 @@ export function createFlow({ documentService, docTypes, templates, faultManager,
       }
 
       if (event.kind === 'action' && event.action?.a === 'show_draft') {
-        const doc = documentService.get(owner, conversation.documentId);
+        const doc = clientFor(owner).getDocument(conversation.documentId);
         if (doc.version) {
           const text = [doc.version.title, ...doc.version.body].filter(Boolean).join('\n\n');
           return [{ text: `Исправленный текст:\n\n${text}`, buttons: keyboards.resultKeyboard(conversation.stateVersion) }];
@@ -395,7 +461,7 @@ export function createFlow({ documentService, docTypes, templates, faultManager,
           title = lines[0];
           body = lines.slice(1);
         }
-        documentService.setManualText(owner, conversation.documentId, { title, body });
+        clientFor(owner).setManualText(conversation.documentId, { title, body });
         conversation.state = 'delivering';
         conversation.stateVersion++;
         return this._doRender(conversation, owner);
@@ -413,7 +479,7 @@ export function createFlow({ documentService, docTypes, templates, faultManager,
      * @returns {Array}
      */
     _startDocument(conversation, event) {
-      const doc = documentService.create({ platform: event.platform, id: event.userId });
+      const doc = clientFor({ platform: event.platform, id: event.userId }).createDocument({});
       conversation.documentId = doc.id;
       conversation.lastFileId = null;
       conversation.pendingField = null;
@@ -452,17 +518,25 @@ export function createFlow({ documentService, docTypes, templates, faultManager,
      */
     async _doRender(conversation, owner) {
       try {
-        const { file, fallback: fallbackId, placeholders } = await documentService.render(owner, conversation.documentId);
-        conversation.lastFileId = file.id; // for "Отправить ещё раз"
+        // Render result format differs by mode:
+        // REST API: { fileId, filename, downloadUrl, placeholders, fallback }
+        // Direct service: { file: { id, filename }, fallback, placeholders }
+        const result = await clientFor(owner).renderDocument(conversation.documentId);
+        const fileId = result.fileId || result.file?.id;
+        const filename = result.filename || result.file?.filename;
+        const fallbackId = result.fallback;
+        const placeholders = result.placeholders || [];
+
+        conversation.lastFileId = fileId; // for "Отправить ещё раз"
         conversation.state = 'ready';
         conversation.stateVersion++;
-        const doc = documentService.get(owner, conversation.documentId);
+        const doc = await clientFor(owner).getDocument(conversation.documentId);
         const docType = docTypes.get(doc.docType);
         const { template } = templates.get(doc.templateId);
         const fallback = fallbackId ? { requestedId: fallbackId, reason: 'missing_or_invalid' } : null;
         const replies = [{ text: texts.ready(docType?.name || doc.docType, template?.name || doc.templateId, placeholders, fallback) }];
         replies[0].buttons = keyboards.resultKeyboard(conversation.stateVersion);
-        replies.push({ file: { fileId: file.id, caption: file.filename } });
+        replies.push({ file: { fileId, caption: filename } });
         return replies;
       } catch (err) {
         log.error({ error: err.message }, 'render failed');
@@ -479,7 +553,7 @@ export function createFlow({ documentService, docTypes, templates, faultManager,
      * @returns {Promise<Array>}
      */
     async _nextField(conversation, owner) {
-      const doc = documentService.get(owner, conversation.documentId);
+      const doc = clientFor(owner).getDocument(conversation.documentId);
       const { pending } = mergeRequisites({
         docType: docTypes.get(doc.docType),
         template: templates.get(doc.templateId).template,
@@ -514,7 +588,7 @@ export function createFlow({ documentService, docTypes, templates, faultManager,
       const owner = { platform: conversation.platform, id: conversation.userId ?? conversation.peerId };
 
       if (event.type === 'processed') {
-        const doc = documentService.get(owner, conversation.documentId);
+        const doc = clientFor(owner).getDocument(conversation.documentId);
         const { pending } = mergeRequisites({
           docType: docTypes.get(doc.docType),
           template: templates.get(doc.templateId).template,
@@ -552,7 +626,7 @@ export function createFlow({ documentService, docTypes, templates, faultManager,
       }
 
       if (event.type === 'failed') {
-        const doc = documentService.get(owner, conversation.documentId);
+        const doc = clientFor(owner).getDocument(conversation.documentId);
         const charCount = doc?.sourceText?.length || 0;
         conversation.state = 'ai_failed';
         conversation.stateVersion++;

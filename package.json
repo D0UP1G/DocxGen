@@ -3,7 +3,6 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently --names backend,frontend --prefix-colors blue,green \"pnpm --filter @docxgen/backend dev\" \"pnpm --filter @docxgen/frontend dev\"",
     "dev:frontend": "pnpm --filter @docxgen/frontend dev",
     "dev:backend": "pnpm --filter @docxgen/backend dev",
     "start": "pnpm --filter @docxgen/backend start",

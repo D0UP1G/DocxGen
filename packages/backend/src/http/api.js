@@ -2,6 +2,7 @@ import { Router } from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { rateLimiter } from './rateLimiter.js';
+import { apiKeyAuth } from './apiKeyAuth.js';
 
 /**
  * REST API router — all document methods delegate to documentService.
@@ -47,6 +48,25 @@ export function createApiRouter(deps = {}) {
       ai,
       templates: templateCount,
     });
+  });
+
+  // ── API Key Auth — all /api/* routes require valid X-API-Key ─────────────
+  // Health endpoint above is NOT under /api, so it bypasses this middleware.
+  // If API_KEY env is not set, middleware is a no-op (backward compatible).
+  router.use('/api', apiKeyAuth());
+
+  // ── Owner extraction from headers — for API-to-API calls ──────────────────
+  // When the bot service calls via REST client with X-API-Key, it also sends
+  // X-Owner-Platform and X-Owner-Id headers to identify the user.
+  // This middleware overrides the session-based owner for these requests.
+  // For web clients (session cookies), the session middleware's owner is kept.
+  router.use('/api', (req, res, next) => {
+    const platform = req.headers['x-owner-platform'];
+    const id = req.headers['x-owner-id'];
+    if (platform && id) {
+      req.owner = { platform, id };
+    }
+    next();
   });
 
   // ── Catalog ───────────────────────────────────────────────────────────────

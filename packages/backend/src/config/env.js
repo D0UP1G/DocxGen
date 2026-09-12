@@ -12,6 +12,8 @@ const flag = (defaultValue = false) => z.preprocess(
 const envSchema = z.object({
   // Server
   PORT: z.coerce.number().default(3000),
+  DOCUMENT_SERVICE_PORT: z.coerce.number().default(3001),
+  BOT_PORT: z.coerce.number().default(3002),
   PUBLIC_URL: z.string().url().default('https://doc3steps.example.ru'),
   DATA_DIR: z.string().default('./data'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
@@ -55,6 +57,10 @@ const envSchema = z.object({
   VK_MODE: z.enum(['callback', 'longpoll']).default('callback'),
   VK_CALLBACK_SECRET: z.string().optional(),
   VK_CONFIRMATION_CODE: z.string().optional(),
+
+  // API Key authentication for Document Service
+  API_KEY: z.string().default(''),
+  DOCUMENT_SERVICE_URL: z.string().url().default('http://localhost:3001'),
 
   // Cleanup
   CLEANUP_ENABLED: flag(true),

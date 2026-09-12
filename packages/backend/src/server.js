@@ -28,6 +28,7 @@ import { renderDocx } from './docx/render.js';
 import { createAiProvider } from './ai/provider.js';
 import { AiFaultManager } from './ai/faults.js';
 import { processDraft } from './ai/processDraft.js';
+import { createDocumentServiceClient } from './client/index.js';
 import { createFlow } from './bot/flow.js';
 import { createDispatcher } from './bot/dispatcher.js';
 import { createNotifier } from './bot/notifier.js';
@@ -69,10 +70,21 @@ export function createRuntime(config = env, { db: passedDb, log: logger = log } 
   };
   const worker = startWorker({ db, queue, handlers, log: logger });
 
-  const flow = createFlow({ documentService, docTypes, templates, faultManager, debugCommands: config.DEBUG_COMMANDS, log: logger });
+  // Create the REST client for the Document Service.
+  // In monolith mode, this points to the same server (self-call on DOCUMENT_SERVICE_PORT).
+  // In split mode, it points to the separate Document Service instance.
+  const docServiceClient = createDocumentServiceClient({
+    baseUrl: config.DOCUMENT_SERVICE_URL,
+    apiKey: config.API_KEY,
+  });
+
+  const flow = createFlow({ docServiceClient, docTypes, templates, faultManager, debugCommands: config.DEBUG_COMMANDS, log: logger });
   const adapters = new Map();
   const dispatcher = createDispatcher({ db, flow, adapters, log: logger });
-  const notifier = createNotifier({ dispatcher, flow, adapters, log: logger });
+  const notifier = createNotifier({ dispatcher, flow, adapters, docServiceClient, log: logger });
+
+  // Wire notifier into flow for polling support (avoids circular dependency)
+  flow.setNotifier(notifier);
 
   // Adapters read files by id — the row carries the path and the human-readable filename.
   const files = { get: (id) => db.prepare('SELECT * FROM files WHERE id = ?').get(id) ?? null };
