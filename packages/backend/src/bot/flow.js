@@ -20,7 +20,6 @@
  *
  * Dependencies are injected (Dependency Inversion):
  *   docServiceClient — REST client for document lifecycle CRUD (sends owner via headers)
- *   documentService — (fallback) direct service for monolith mode / backward compat
  *   docTypes — document type catalog (list, get)
  *   templates — template catalog (list, get)
  *   log — pino-compatible logger
@@ -43,51 +42,20 @@ function textOf(result) {
 /**
  * Create the dialog flow handler.
  *
- * Accepts either `docServiceClient` (REST) or `documentService` (direct).
- * When both are provided, `docServiceClient` takes precedence.
+ * Uses REST client for all document operations.
  *
- * @param {{ docServiceClient?: object, documentService?: object, docTypes: object, templates: object, log: object }} deps
+ * @param {{ docServiceClient: object, docTypes: object, templates: object, log: object }} deps
  * @returns {{ handle: function, onDocumentEvent: function, onDeliveryFailed: function, setNotifier: function, trackProcessing: function }}
  */
-export function createFlow({ docServiceClient, documentService, docTypes, templates, faultManager, debugCommands = false, log }) {
-  // Determine the active document service interface.
-  // REST mode: use docServiceClient (sends owner via headers).
-  // Direct mode: use documentService (in-process calls with owner parameter).
-  const useRest = !!docServiceClient;
-  const ds = docServiceClient || documentService;
-
+export function createFlow({ docServiceClient, docTypes, templates, faultManager, debugCommands = false, log }) {
   /**
    * Create an owner-bound client for a specific user.
-   * REST mode: returns a client with owner headers attached.
-   * Direct mode: returns a proxy that passes owner as the first argument.
+   * Returns a client with owner headers attached.
    * @param {{ platform: string, id: string }} owner
    * @returns {object} client with methods: createDocument, getDocument, setDraft, etc.
    */
   function clientFor(owner) {
-    if (useRest) {
-      return docServiceClient.withOwner(owner);
-    }
-    // Direct mode: wrap the documentService to match the REST client interface
-    return {
-      createDocument: () => documentService.create(owner),
-      getDocument: (id) => documentService.get(owner, id),
-      setDraft: (id, text, opts) => documentService.setDraft(owner, id, text, opts),
-      updateDocument: (id, data) => {
-        if (data.docType !== undefined) documentService.setType(owner, id, data.docType);
-        if (data.templateId !== undefined) documentService.setTemplate(owner, id, data.templateId);
-        return documentService.get(owner, id);
-      },
-      processDocument: (id) => documentService.startProcessing(owner, id),
-      retryProcessing: (id) => documentService.retryProcessing(owner, id),
-      renderDocument: (id) => documentService.render(owner, id),
-      setFields: (id, fields) => {
-        for (const [key, value] of Object.entries(fields)) {
-          documentService.setField(owner, id, key, value);
-        }
-        return documentService.get(owner, id);
-      },
-      setManualText: (id, content) => documentService.setManualText(owner, id, content),
-    };
+    return docServiceClient.withOwner(owner);
   }
 
   // Notifier reference — set after creation to avoid circular dependency

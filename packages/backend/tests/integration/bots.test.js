@@ -11,7 +11,7 @@ import path from 'node:path';
 import request from 'supertest';
 import pino from 'pino';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createRuntime } from '../../src/server.js';
+import { createRuntime } from '../../src/runtime.js';
 
 const silentLog = pino({ level: 'silent' });
 

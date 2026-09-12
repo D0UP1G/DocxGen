@@ -3,9 +3,6 @@
  *
  * Runs as an independent HTTP server on DOCUMENT_SERVICE_PORT (default 3001).
  * Wires only doc-related modules — no bot adapters, no dispatcher, no flow.
- *
- * The monolith (server.js) remains the fallback for full-stack deployments.
- * This entry point exists for scaled-out document processing.
  */
 
 import path from 'node:path';

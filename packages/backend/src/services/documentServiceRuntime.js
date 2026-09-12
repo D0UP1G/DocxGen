@@ -1,9 +1,9 @@
 /**
  * Document Service runtime — wires only doc-related modules.
  *
- * This is a subset of server.js's createRuntime: no bot adapters, no dispatcher,
+ * This is a subset of the full runtime: no bot adapters, no dispatcher,
  * no notifier, no flow. The standalone document-service entry point uses this
- * instead of the full monolith composition root.
+ * instead of the full composition root.
  *
  * SOLID — Single Responsibility: one runtime, one concern (documents).
  * SOLID — Dependency Inversion: all dependencies injected, never imported.

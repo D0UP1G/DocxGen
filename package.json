@@ -5,7 +5,7 @@
   "scripts": {
     "dev:frontend": "pnpm --filter @docxgen/frontend dev",
     "dev:backend": "pnpm --filter @docxgen/backend dev",
-    "start": "pnpm --filter @docxgen/backend start",
+    "start": "pnpm --filter @docxgen/backend start:doc-service",
     "test": "pnpm --filter @docxgen/backend test",
     "eval": "pnpm --filter @docxgen/backend eval",
     "build": "pnpm -r build",

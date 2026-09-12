@@ -48,7 +48,7 @@ import { createLocalChatRouter } from './adapters/local/router.js';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /**
- * Build the whole service without listening on a port — used by the entry point below and by tests.
+ * Build the whole service without listening on a port — used by entry points and tests.
  * @param {object} [config] - env overrides
  * @param {{ db?: object, log?: object }} [options]
  */
@@ -71,8 +71,6 @@ export function createRuntime(config = env, { db: passedDb, log: logger = log } 
   const worker = startWorker({ db, queue, handlers, log: logger });
 
   // Create the REST client for the Document Service.
-  // In monolith mode, this points to the same server (self-call on DOCUMENT_SERVICE_PORT).
-  // In split mode, it points to the separate Document Service instance.
   const docServiceClient = createDocumentServiceClient({
     baseUrl: config.DOCUMENT_SERVICE_URL,
     apiKey: config.API_KEY,
@@ -156,26 +154,4 @@ export function createRuntime(config = env, { db: passedDb, log: logger = log } 
       db.close();
     },
   };
-}
-
-// ── Entry point ──────────────────────────────────────────────────────────────
-
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const runtime = createRuntime();
-  const server = runtime.app.listen(env.PORT, () => {
-    const parts = [`http://localhost:${env.PORT}`, `ИИ: ${runtime.provider.name ?? env.AI_PROVIDER}`];
-    if (env.LOCAL_CHAT) parts.push(`стенд: http://localhost:${env.PORT}/dev/chat`);
-    if (env.MAX_ENABLED) parts.push(`MAX: ${env.MAX_MODE}`);
-    if (env.VK_ENABLED) parts.push(`ВК: ${env.VK_MODE}`);
-    log.info({ port: env.PORT }, `Документ за 3 шага — ${parts.join(' · ')}`);
-  });
-
-  const shutdown = async (signal) => {
-    log.info({ signal }, 'Остановка сервера…');
-    server.close();
-    await runtime.close();
-    process.exit(0);
-  };
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
-  process.on('SIGINT', () => shutdown('SIGINT'));
 }

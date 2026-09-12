@@ -1,23 +1,17 @@
 /**
  * Notifier — bridges document lifecycle events to dialog conversations.
  *
- * Supports two modes:
- * 1. EventEmitter (monolith): listens to core/events.js for document.processed/failed
- * 2. Polling (split architecture): polls Document Service via REST client
- *
- * The polling mode is used when the bot service is separated from the
- * Document Service. It maintains a Set of document IDs to poll and
- * checks their status periodically.
+ * Uses polling to check document status via REST client.
+ * Maintains a Set of document IDs to poll and checks their status periodically.
  *
  * Dependencies are injected (Dependency Inversion):
  *   dispatcher — for findByDocumentId
  *   flow — for onDocumentEvent
  *   adapters — Map<string, Adapter>
- *   docServiceClient — REST client (for polling mode)
+ *   docServiceClient — REST client (for polling)
  *   log — pino-compatible logger
  */
 
-import { events } from '../core/events.js';
 import { sendReplies } from './sendReplies.js';
 
 /** Synthetic event for adapters: file delivery is idempotent per trigger event id. */
@@ -28,11 +22,11 @@ const systemEvent = (conv, kind, documentId) => ({
 
 /**
  * Create the notifier.
- * @param {{ dispatcher: object, flow: object, adapters: Map, docServiceClient?: object, log: object, pollIntervalMs?: number }} deps
+ * @param {{ dispatcher: object, flow: object, adapters: Map, docServiceClient: object, log: object, pollIntervalMs?: number }} deps
  * @returns {{ stop: function, trackDocument: function }}
  */
 export function createNotifier({ dispatcher, flow, adapters, docServiceClient, log, pollIntervalMs = 5_000 }) {
-  // ── Document tracking for polling mode ──────────────────────────────────
+  // ── Document tracking for polling ──────────────────────────────────
   const trackedDocs = new Map(); // documentId → { status: string, lastCheck: number }
 
   /**
@@ -41,7 +35,6 @@ export function createNotifier({ dispatcher, flow, adapters, docServiceClient, l
    * @param {string} initialStatus — e.g. 'processing'
    */
   function trackDocument(documentId, initialStatus = 'processing') {
-    if (!docServiceClient) return; // No polling without REST client
     trackedDocs.set(documentId, { status: initialStatus, lastCheck: Date.now() });
     log.debug({ documentId }, 'tracking document for polling');
   }
@@ -76,21 +69,7 @@ export function createNotifier({ dispatcher, flow, adapters, docServiceClient, l
     }
   }
 
-  // ── EventEmitter mode (for monolith) ─────────────────────────────────────
-  const onProcessed = async ({ documentId }) => {
-    trackedDocs.delete(documentId); // Stop polling if tracked
-    await handleDocumentEvent(documentId, 'processed');
-  };
-
-  const onFailed = async ({ documentId, reason }) => {
-    trackedDocs.delete(documentId); // Stop polling if tracked
-    await handleDocumentEvent(documentId, 'failed', reason);
-  };
-
-  events.on('document.processed', onProcessed);
-  events.on('document.failed', onFailed);
-
-  // ── Polling loop (for split architecture) ────────────────────────────────
+  // ── Polling loop ────────────────────────────────────────────────────
   let pollTimer = null;
 
   async function pollTrackedDocuments() {
@@ -121,21 +100,17 @@ export function createNotifier({ dispatcher, flow, adapters, docServiceClient, l
     }
   }
 
-  if (docServiceClient) {
-    pollTimer = setInterval(pollTrackedDocuments, pollIntervalMs);
-    // Don't block the event loop
-    if (pollTimer.unref) pollTimer.unref();
-    log.info({ pollIntervalMs }, 'document polling started');
-  }
+  pollTimer = setInterval(pollTrackedDocuments, pollIntervalMs);
+  // Don't block the event loop
+  if (pollTimer.unref) pollTimer.unref();
+  log.info({ pollIntervalMs }, 'document polling started');
 
   return {
     /** Track a document for polling (called by flow when processing starts). */
     trackDocument,
 
-    /** Remove event listeners and stop polling (for cleanup in tests). */
+    /** Stop polling (for cleanup in tests). */
     stop() {
-      events.removeListener('document.processed', onProcessed);
-      events.removeListener('document.failed', onFailed);
       if (pollTimer) {
         clearInterval(pollTimer);
         pollTimer = null;
