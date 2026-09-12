@@ -16,7 +16,8 @@
     "start:doc-service": "pnpm --filter @docxgen/backend start:doc-service",
     "start:max-bot": "pnpm --filter @docxgen/backend start:max-bot",
     "start:vk-bot": "pnpm --filter @docxgen/backend start:vk-bot",
-    "start:local-bot": "pnpm --filter @docxgen/backend start:local-bot"
+    "start:local-bot": "pnpm --filter @docxgen/backend start:local-bot",
+    "dev": "concurrently --names doc,max,vk,local,web --prefix-colors blue,yellow,magenta,green,red \"pnpm --filter @docxgen/backend start:doc-service\" \"pnpm --filter @docxgen/backend start:max-bot\" \"pnpm --filter @docxgen/backend start:vk-bot\" \"pnpm --filter @docxgen/backend start:local-bot\" \"pnpm --filter @docxgen/frontend dev\""
   },
   "devDependencies": {
     "concurrently": "^10.0.5"
