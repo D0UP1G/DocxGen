@@ -11,7 +11,12 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "opencode:check": "pnpm --filter @docxgen/backend opencode:check",
-    "max:subscribe": "pnpm --filter @docxgen/backend max:subscribe"
+    "max:subscribe": "pnpm --filter @docxgen/backend max:subscribe",
+    "start:services": "pnpm --filter @docxgen/backend start:services",
+    "start:doc-service": "pnpm --filter @docxgen/backend start:doc-service",
+    "start:max-bot": "pnpm --filter @docxgen/backend start:max-bot",
+    "start:vk-bot": "pnpm --filter @docxgen/backend start:vk-bot",
+    "start:local-bot": "pnpm --filter @docxgen/backend start:local-bot"
   },
   "devDependencies": {
     "concurrently": "^10.0.5"
