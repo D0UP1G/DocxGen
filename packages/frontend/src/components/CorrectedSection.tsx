@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
-import { CheckCircle2 } from 'lucide-react';
+import { Card } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { RequisitesForm } from './RequisitesForm';
 import type { Requisites } from '@/types/document';
@@ -33,26 +33,35 @@ export const CorrectedSection = memo(function CorrectedSection({
       animate={{ opacity: 1, y: 0 }}
       exit={prefersReduced ? {} : { opacity: 0, y: -20 }}
       transition={{ duration: 0.3, ease: 'easeInOut' }}
-      className="space-y-2 rounded-lg border p-4"
+      className="space-y-9"
     >
-      <div className="flex items-center gap-2 font-medium">
-        <CheckCircle2 className="h-4 w-4 text-green-600" />
-        Исправленный текст — его можно отредактировать
+      <Card className="px-8 py-7">
+        <div className="flex items-baseline justify-between gap-4">
+          <span className="label-caps">Исправленный текст</span>
+          <span className="text-[13px] text-muted-foreground">правится прямо здесь</span>
+        </div>
+        <Textarea
+          variant="bare"
+          value={correctedText}
+          onChange={(e) => onTextChange(e.target.value)}
+          rows={10}
+          className="mt-3.5 resize-y"
+          disabled={disabled}
+        />
+      </Card>
+
+      <div>
+        <span className="label-caps">Реквизиты</span>
+        <div className="mt-1.5">
+          <RequisitesForm
+            fields={visibleFields}
+            requisites={requisites}
+            visibleFields={visibleFields}
+            onChange={onRequisiteChange}
+            disabled={disabled}
+          />
+        </div>
       </div>
-      <Textarea
-        value={correctedText}
-        onChange={(e) => onTextChange(e.target.value)}
-        rows={10}
-        className="resize-y"
-        disabled={disabled}
-      />
-      <RequisitesForm
-        fields={visibleFields}
-        requisites={requisites}
-        visibleFields={visibleFields}
-        onChange={onRequisiteChange}
-        disabled={disabled}
-      />
     </motion.div>
   );
 });

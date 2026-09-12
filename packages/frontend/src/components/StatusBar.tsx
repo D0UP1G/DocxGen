@@ -7,6 +7,11 @@ interface StatusBarProps {
   isVisible: boolean;
 }
 
+/**
+ * Ход работы — полоса между двумя волосяными линиями, а не плашка: ожидание
+ * здесь долгое, и цветной прямоугольник на полэкрана вымораживает сильнее,
+ * чем сама пауза.
+ */
 export const StatusBar = memo(function StatusBar({ status, isVisible }: StatusBarProps) {
   const prefersReduced = useReducedMotion();
   const show = isVisible && !!status;
@@ -20,10 +25,11 @@ export const StatusBar = memo(function StatusBar({ status, isVisible }: StatusBa
           animate={{ opacity: 1, y: 0 }}
           exit={prefersReduced ? {} : { opacity: 0, y: -8 }}
           transition={{ duration: 0.2, ease: 'easeOut' }}
-          className="rounded-md bg-blue-50 p-3 text-sm text-blue-700 flex items-center gap-2"
+          className="flex items-center gap-3 border-y border-border py-6"
         >
-          <Loader2 className="h-4 w-4 animate-spin" />
-          {status}
+          <Loader2 className="h-[17px] w-[17px] animate-spin text-primary" strokeWidth={1.5} />
+          <span className="text-base font-medium">{status}</span>
+          <span className="ml-auto text-[13px] text-muted-foreground">обычно 25—90 секунд</span>
         </motion.div>
       )}
     </AnimatePresence>

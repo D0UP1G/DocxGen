@@ -73,10 +73,27 @@ export const processText = createAsyncThunk<
     }
     if (current.status === 'ai_failed') return rejectWithValue(current.error ?? 'Обработка текста не удалась');
     if (!current.version) return rejectWithValue('Сервер не вернул обработанный документ');
+    const aiRequisites = Object.fromEntries(
+      Object.entries(current.version.aiFields ?? {}).map(([key, field]) => [
+        key,
+        typeof field === 'object' && field !== null && 'value' in field
+          ? String((field as { value: unknown }).value)
+          : String(field ?? ''),
+      ]),
+    );
+    const warnings = (current.version.warnings ?? []).map((warning) => (
+      typeof warning === 'string'
+        ? warning
+        : `${warning.key ?? 'Реквизит'}: ${warning.reason ?? 'проверка не пройдена'}`
+    ));
+
     return {
       correctedText: current.version.body.join('\n'),
-      requisites: { ...current.version.aiFields, ...current.userFields },
-      validation: { missing: [], warnings: current.version.warnings ?? [] },
+      requisites: { ...aiRequisites, ...current.userFields },
+      validation: {
+        missing: (current.pending ?? []).map(({ key, label }) => ({ field: key, label })),
+        warnings,
+      },
       source: current.id,
       documentId: current.id,
     } as ProcessResponse & { documentId: string };
@@ -102,23 +119,17 @@ export const generateDocument = createAsyncThunk<
 >(
   'document/generateDocument',
   async (
-    { text: _text, correctedText, requisites, documentType: _documentType, templateId: _templateId },
+    // Тип и шаблон уже сохранены на сервере при создании документа — рендеру достаточно его id
+    { correctedText, requisites },
     { getState, rejectWithValue },
   ) => {
     try {
       let documentId = (getState() as { document: DocumentState }).document.documentId;
       if (!documentId) return rejectWithValue('Документ ещё не создан');
 
-      // Keep the AI-derived title ("О …") instead of overwriting it with a placeholder.
-      const currentResponse = await fetch(`/api/documents/${documentId}`, { credentials: 'include' });
-      const current = currentResponse.ok
-        ? (await currentResponse.json()) as import('@/types/document').DocumentView
-        : null;
-      const title = current?.version?.title || 'Документ';
-
       const textResponse = await fetch(`/api/documents/${documentId}/text`, {
         method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, body: correctedText.split(/\r?\n/).filter(Boolean) }),
+        body: JSON.stringify({ title: 'Документ', body: correctedText.split(/\r?\n/).filter(Boolean) }),
       });
       if (!textResponse.ok) return rejectWithValue(await getErrorMessage(textResponse));
       const fieldsResponse = await fetch(`/api/documents/${documentId}/fields`, {
@@ -238,7 +249,6 @@ const documentSlice = createSlice({
       .addCase(generateDocument.rejected, (state, action) => {
         state.generating = false;
         state.error = action.payload ?? 'Unknown error';
-        state.status = '';
       });
   },
 });

@@ -1,48 +1,53 @@
-import { memo } from 'react';
+import { Fragment, memo } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
-import { CheckCircle2, FileText } from 'lucide-react';
+
+import { cn } from '@/lib/utils';
 
 interface StepIndicatorProps {
   currentStep: 1 | 2;
+  className?: string;
 }
 
 const steps = [
-  { num: 1 as const, label: 'Черновик', icon: FileText },
-  { num: 2 as const, label: 'Результат', icon: CheckCircle2 },
+  { num: 1 as const, label: 'Черновик' },
+  { num: 2 as const, label: 'Результат' },
 ];
 
-export const StepIndicator = memo(function StepIndicator({ currentStep }: StepIndicatorProps) {
+/**
+ * Рельс вместо кружков: номер антиквой, подпись капителью, между шагами —
+ * волосяная линия во всю оставшуюся ширину. Пройденный шаг не закрашивается,
+ * а гаснет до чернильного: закрашен всегда ровно один — текущий.
+ */
+export const StepIndicator = memo(function StepIndicator({ currentStep, className }: StepIndicatorProps) {
   const prefersReduced = useReducedMotion();
 
   return (
-    <div className="flex items-center justify-center gap-4 text-sm">
+    <div className={cn('flex items-center gap-5', className)}>
       {steps.map((step, i) => {
         const active = currentStep === step.num;
         const done = currentStep > step.num;
         return (
-          <div key={step.num} className="flex items-center gap-2">
-            <motion.div
-              animate={
-                prefersReduced
-                  ? {}
-                  : active
-                    ? { scale: [1, 1.2, 1] }
-                    : { scale: 1 }
-              }
-              transition={{ duration: 0.3, ease: 'easeOut' }}
-              className={`flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-bold transition-colors ${
-                active
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : done
-                    ? 'border-green-600 bg-green-600 text-white'
-                    : 'border-muted-foreground/30 text-muted-foreground'
-              }`}
+          <Fragment key={step.num}>
+            {i > 0 && <span className="h-px flex-grow bg-border" aria-hidden="true" />}
+            <motion.span
+              animate={prefersReduced ? {} : { scale: active ? [0.94, 1] : 1 }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
+              className={cn(
+                'font-display text-2xl font-semibold leading-none transition-colors',
+                active ? 'text-primary' : done ? 'text-foreground' : 'text-muted-foreground/50',
+              )}
             >
-              {done ? <CheckCircle2 className="h-4 w-4" /> : step.num}
-            </motion.div>
-            <span className={active ? 'font-medium' : 'text-muted-foreground'}>{step.label}</span>
-            {i < steps.length - 1 && <span className="mx-1 text-muted-foreground/40">→</span>}
-          </div>
+              {String(step.num).padStart(2, '0')}
+            </motion.span>
+            <span
+              className={cn(
+                'text-[13px] uppercase tracking-[0.1em] transition-colors',
+                active ? 'font-semibold text-foreground' : done ? 'text-muted-foreground' : 'text-muted-foreground/70',
+              )}
+            >
+              {step.label}
+            </span>
+          </Fragment>
         );
       })}
     </div>

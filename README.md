@@ -50,11 +50,9 @@ is available in the browser at http://localhost:3000/dev/chat — no messenger t
 Free OpenCode models answer in 25–90 s and do not accept parallel requests from one address,
 so calls are serialized (`OPENCODE_MAX_PARALLEL=1`).
 
-### Run with Docker (Optional)
-
-```bash
-docker compose up
-```
+For container deployments use the repository `Containerfile` and provide the
+same `.env` values to the single backend process. A compose file is not part of
+this repository, so local development uses `pnpm dev`.
 
 ## Bots (MAX, VK)
 
@@ -79,6 +77,17 @@ A messenger emulator for development: the same dialog as in MAX and VK, plus
 demo drafts, `/ai_fail` (simulated AI outage), simulated file-delivery failure,
 the AI processing log and a second user for isolation checks. Enable with `LOCAL_CHAT=1`
 (never on a public server — the stand has no authentication).
+
+## Logs
+
+Console output is human-readable and colorized; the same stream is written as JSON lines to
+`DATA_DIR/logs/app.log` (grep-friendly, survives closing the terminal). Bot tokens and the AI key
+are redacted in both. Set `LOG_LEVEL=debug` to trace a scenario end to end — incoming bot events,
+dialog state transitions, queue jobs, AI request/response with timings, and DOCX assembly.
+
+```bash
+grep '"documentId":"<id>"' packages/backend/data/logs/app.log
+```
 
 ## Architecture
 
@@ -138,6 +147,7 @@ Key environment variables:
 |----------|-------------|---------|
 | `PORT` | Server port | 3000 |
 | `DATA_DIR` | Data storage directory | ./data |
+| `LOG_LEVEL` | `debug` traces bot events, dialog transitions, queue jobs and AI timings | info |
 | `AI_PROVIDER` | AI provider type | openai-compat |
 | `AI_BASE_URL` | AI API endpoint | http://localhost:11434/v1 |
 | `AI_MODEL` | AI model name | qwen2.5:7b-instruct |
@@ -186,7 +196,10 @@ pnpm build         # Build project
 - [API Reference](docs/api.md) — Full REST API documentation
 - [Bots setup](docs/bots-setup.md) — VK community and MAX bot, step by step (in Russian)
 - [Integration Guide](docs/integration-guide.md) — Practical examples for web, bot, and third-party integrations
-- [Architecture](plan-backend.md) — Detailed backend architecture and design decisions
+- [Architecture](docs/architecture.md) — Single backend and adapter architecture
+- [AI processing](docs/ai.md) — Providers, validation, retries and debug logging
+- [Adding types/templates](docs/adding-type-or-template.md) — Catalog extension guide
+- [Limitations](docs/limitations.md) — Deployment and provider constraints
 
 ## License
 

@@ -13,13 +13,19 @@ import pino from 'pino';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createRuntime } from '../../src/runtime.js';
 
-const silentLog = pino({ level: 'silent' });
+// Логи теста молчат по умолчанию; TEST_LOG_LEVEL=debug включает их для разбора падения
+const silentLog = pino({ level: process.env.TEST_LOG_LEVEL ?? 'silent' });
+
+// Весь backend поднимается прямо здесь с временной базой: тест не зависит
+// от запущенного снаружи процесса и от ключей из .env.
+const API_KEY = 'bots-test-api-key';
 
 const testEnv = (dataDir) => ({
   PORT: 0, DATA_DIR: dataDir, LOCAL_CHAT: true, DEBUG_COMMANDS: true,
   AI_PROVIDER: 'mock', AI_FAULT: 'off', AI_TIMEOUT_MS: 5000,
   MAX_ENABLED: false, VK_ENABLED: false,
   CLEANUP_ENABLED: false, CLEANUP_FILE_MAX_AGE_HOURS: 24, CLEANUP_LOG_MAX_AGE_DAYS: 30,
+  API_KEY, DOCUMENT_POLL_INTERVAL_MS: 100,
 });
 
 let runtime;
@@ -31,10 +37,12 @@ afterEach(async () => {
   if (dataDir) fs.rmSync(dataDir, { recursive: true, force: true });
 });
 
-/** Starts the runtime and returns helpers that talk to the stand like a browser would. */
-function startBot() {
+/** Starts both runtimes and returns helpers that talk to the stand like a browser would. */
+async function startBot() {
   dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bots-test-'));
-  runtime = createRuntime(testEnv(dataDir), { db: undefined, log: silentLog });
+
+  const config = testEnv(dataDir);
+  runtime = createRuntime(config, { log: silentLog });
   const app = runtime.app;
   const peer = 'tester';
 
@@ -61,7 +69,7 @@ function startBot() {
 
 describe('bots end-to-end (local stand)', () => {
   it('greets by name and walks the draft to a downloadable DOCX', async () => {
-    const bot = startBot();
+    const bot = await startBot();
 
     await bot.send('/start');
     expect((await bot.messages()).at(-1).text).toContain('Иван Христофоров');
@@ -93,8 +101,7 @@ describe('bots end-to-end (local stand)', () => {
   });
 
   it('keeps the draft and offers a retry when the AI fails (/ai_fail)', async () => {
-    // Две итерации нотификатора (по 5 с) — сбой и повторная обработка — не влезают в дефолтные 10 с.
-    const bot = startBot();
+    const bot = await startBot();
 
     await bot.send('Прошу согласовать отпуск с 1 октября.');
     await bot.send('/ai_fail');
@@ -116,7 +123,7 @@ describe('bots end-to-end (local stand)', () => {
   }, 25000);
 
   it('offers «Отправить ещё раз» without reprocessing when the file cannot be sent', async () => {
-    const bot = startBot();
+    const bot = await startBot();
 
     await bot.send('Справка о выполнении работ за сентябрь.');
     await bot.press('Продолжить');

@@ -2,7 +2,7 @@
  * Shared constants for the DocxGen document generator.
  */
 
-import type { DocumentTypeId } from '@/types/document';
+import type { DocumentTypeId, TemplateId } from '@/types/document';
 
 export const DOCUMENT_TYPES: Array<{
   id: DocumentTypeId;
@@ -26,11 +26,7 @@ export const FIELD_LABELS: Record<string, string> = {
   signerName: 'ФИО подписывающего',
   period: 'Период',
   date: 'Дата',
-  subject: 'Заголовок / тема',
   number: 'Номер',
-  position: 'Должность',
-  signature: 'Подпись',
-  greeting: 'Обращение',
   executor: 'Исполнитель',
 };
 
@@ -46,8 +42,14 @@ export const FIELD_ORDER: string[] = [
   'period',
   'date',
   'number',
-  'subject',
-  'signature',
-  'greeting',
   'executor',
+];
+
+export const TEMPLATES: Array<{
+  id: TemplateId;
+  label: string;
+  description: string;
+}> = [
+  { id: 'classic', label: 'Классический корпоративный', description: 'Times New Roman 14 пт, полуторный интервал, адресат справа вверху, номер страницы сверху по центру со второй страницы' },
+  { id: 'modern', label: 'Современный регламентный', description: 'Arial 12 пт, интервал 1.15, выравнивание по левому краю, адресат слева, организация в колонтитуле, «Страница N из M» внизу' },
 ];

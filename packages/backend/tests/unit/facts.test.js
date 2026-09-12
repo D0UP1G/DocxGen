@@ -130,3 +130,73 @@ describe('compare', () => {
     expect(result.dates.length).toBeGreaterThanOrEqual(2);
   });
 });
+
+describe('semantic equivalence (normalizeNumber)', () => {
+  it('"2.5 млн руб" == "2500000 руб" via money path', () => {
+    const src = 'Сумма 2.5 млн руб';
+    const out = 'Сумма 2500000 руб';
+    const result = compare(src, out);
+    // Money path handles equivalence: 2.5 млн → 2500000, 2500000 → 2500000
+    expect(result.added).not.toContain('money:2500000');
+    expect(result.lost).not.toContain('money:2500000');
+  });
+
+  it('"180 тыс руб" == "180000 руб" via money path', () => {
+    const src = 'Стоимость 180 тыс руб';
+    const out = 'Стоимость 180000 руб';
+    const result = compare(src, out);
+    expect(result.added).not.toContain('money:180000');
+    expect(result.lost).not.toContain('money:180000');
+  });
+
+  it('"3.2 млрд руб" — млрд now correctly detected as money (FIXED)', () => {
+    // The money regex now includes млрд, so "3.2 млрд руб" extracts money as ["3200000000"]
+    const src = 'Бюджет 3.2 млрд руб';
+    const out = 'Бюджет 3200000000 руб';
+    const result = compare(src, out);
+    // After fix: equivalence IS detected — no added/lost money
+    expect(result.added).not.toContain('money:3200000000');
+    expect(result.lost).not.toContain('money:3200000000');
+  });
+
+  it('mixed formats: "2.5 млн руб" in draft, "2500000 руб" in output → no added/lost money', () => {
+    const src = 'Оплата 2.5 млн руб за работы';
+    const out = 'Оплата 2500000 руб за работы';
+    const result = compare(src, out);
+    expect(result.added).not.toContain('money:2500000');
+    expect(result.lost).not.toContain('money:2500000');
+  });
+
+  it('"5 тыс руб" == "5000 руб" via money path (numbers differ)', () => {
+    // Money path: src extracts money "5000" (5*1000), out extracts money "5000" → match
+    // Numbers path: src extracts "5", out extracts "5000" → mismatch (normalizeNumber is no-op on plain numbers)
+    const src = '5 тыс руб';
+    const out = '5000 руб';
+    const result = compare(src, out);
+    // Money matches, but numbers don't (5 vs 5000)
+    expect(result.added).toContain('number:5000');
+    expect(result.lost).toContain('number:5');
+  });
+
+  it('detects added number when amounts differ', () => {
+    const src = 'Сумма 2.5 млн руб';
+    const out = 'Сумма 3 млн руб';
+    const result = compare(src, out);
+    // Money: 2.5 млн → 2500000, 3 млн → 3000000
+    expect(result.added).toContain('money:3000000');
+    expect(result.lost).toContain('money:2500000');
+  });
+
+  it('normalizeNumber is applied to numbers array (no-op for plain numbers)', () => {
+    // extractFacts numbers don't contain suffixes, so normalizeNumber is a no-op
+    const src = 'Сумма 2.5 млн руб';
+    const out = 'Сумма 2500000 руб';
+    const srcFacts = extractFacts(src);
+    const outFacts = extractFacts(out);
+    // src numbers: ["2.5"], out numbers: ["2500000"]
+    expect(srcFacts.numbers).toContain('2.5');
+    expect(outFacts.numbers).toContain('2500000');
+    // normalizeNumber doesn't help here — these are raw numbers without suffixes
+    // The money comparison handles the equivalence instead
+  });
+});

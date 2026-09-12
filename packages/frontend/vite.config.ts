@@ -1,23 +1,34 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import path from 'path'
+import path from 'node:path'
 
-export default defineConfig({
-  plugins: [react(), tailwindcss()],
-  server: {
-      // The audio service is separate from the document service. This rule
-      // must be explicit: otherwise /api/audio/transcribe is sent to port 3001
-      // and Vite returns an HTML 404 page, which looks like a JSON.parse error.
+// Единственный backend слушает PORT. Прокси должен использовать тот же порт,
+// иначе запросы /api молча упираются в ECONNREFUSED.
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, path.resolve(import.meta.dirname, '../..'), '')
+  const target = `http://localhost:${env.PORT || '3000'}`
+
+  return {
+    plugins: [react(), tailwindcss()],
+    server: {
+      // По умолчанию Vite слушает только ::1, и http://localhost по IPv4 упирается в
+      // «отказано в подключении». 127.0.0.1 доступен и как localhost, и напрямую.
+      host: '127.0.0.1',
       proxy: {
-        '/api/audio': { target: 'http://127.0.0.1:3005', changeOrigin: true, configure: (proxy) => proxy.on('error', (error) => console.error('[audio proxy]', error.message)) },
-        '/api': { target: 'http://127.0.0.1:3001', changeOrigin: true },
-        '/health': { target: 'http://127.0.0.1:3001', changeOrigin: true },
+        '/api/audio': {
+          target: `http://127.0.0.1:${env.AUDIO_SERVICE_PORT || '3005'}`,
+          changeOrigin: true,
+          ...(env.API_KEY ? { headers: { 'X-API-Key': env.API_KEY } } : {}),
+        },
+        '/api': target,
+        '/health': target,
       },
-  },
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
     },
-  },
+    resolve: {
+      alias: {
+        '@': path.resolve(import.meta.dirname, './src'),
+      },
+    },
+  }
 })

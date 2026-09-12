@@ -33,7 +33,14 @@ export interface DocumentView {
   sourceText: string;
   draftVersion: number;
   userFields: Requisites;
-  version: { title: string; body: string[]; aiFields: Requisites; warnings?: string[] } | null;
+  version: {
+    title: string;
+    body: string[];
+    aiFields: Record<string, string | { value: string; quote: string } | null>;
+    warnings?: Array<string | { key?: string; reason?: string; severity?: string }>;
+  } | null;
+  pending?: Array<{ key: string; label: string; question?: string; example?: string }>;
+  placeholders?: string[];
   error: string | null;
 }
 

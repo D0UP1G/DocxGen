@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently --names doc,audio,max,vk,local,web --prefix-colors blue,cyan,yellow,magenta,green,red \"npm --prefix packages/backend run start:doc-service\" \"npm --prefix packages/backend run start:audio-service\" \"npm --prefix packages/backend run start:max-bot\" \"npm --prefix packages/backend run start:vk-bot\" \"npm --prefix packages/backend run start:local-bot\" \"cd packages/frontend && npm run dev\"",
-    "start": "concurrently --names doc,audio --prefix-colors blue,cyan \"node --env-file-if-exists=.env packages/backend/src/document-service.js\" \"node --env-file-if-exists=.env packages/backend/src/audio-service.js\"",
+    "dev": "concurrently --names backend,audio,web --prefix-colors blue,cyan,red \"npm --prefix packages/backend start\" \"npm --prefix packages/backend run start:audio-service\" \"npm --prefix packages/frontend run dev\"",
+    "start": "concurrently --names backend,audio --prefix-colors blue,cyan \"npm --prefix packages/backend start\" \"npm --prefix packages/backend run start:audio-service\"",
     "start:audio": "npm --prefix packages/backend run start:audio-service",
     "test": "pnpm --filter @docxgen/backend test",
     "build": "pnpm -r build",

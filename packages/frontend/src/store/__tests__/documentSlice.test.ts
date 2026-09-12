@@ -63,8 +63,8 @@ describe('documentSlice reducer', () => {
     });
 
     it('setTemplateId updates templateId', () => {
-      const state = reducer(initialState, setTemplateId('classic'));
-      expect(state.templateId).toBe('classic');
+      const state = reducer(initialState, setTemplateId('modern'));
+      expect(state.templateId).toBe('modern');
     });
 
     it('setMissingFields updates missingFields', () => {

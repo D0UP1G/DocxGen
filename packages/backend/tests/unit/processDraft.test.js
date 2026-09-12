@@ -76,7 +76,7 @@ describe('processDraft', () => {
     );
 
     const result = await processDraft({
-      draft: 'Текст',
+      draft: 'Записка о результатах совещания',
       docType: { ...DOC_TYPE, fields: [] },
       userFields: {},
       provider,
@@ -109,6 +109,12 @@ describe('processDraft', () => {
 
     expect(result.body).toEqual(['Retry text']);
     expect(provider.complete).toHaveBeenCalledTimes(2);
+    // Retry rebuilds messages: stronger system instruction + original user message
+    const retryMessages = provider.complete.mock.calls[1][0];
+    expect(retryMessages).toHaveLength(2);
+    expect(retryMessages[0].role).toBe('system');
+    expect(retryMessages[0].content).toContain('ВАЖНО');
+    expect(retryMessages[1].role).toBe('user');
   });
 
   it('two invalid JSONs → AiInvalidResponseError', async () => {
@@ -269,6 +275,148 @@ describe('processDraft', () => {
       faultManager: fm,
       ownerKey: 'any:owner',
     })).rejects.toThrow(AiUnavailableError);
+  });
+
+  it('grounding failure includes groundedFields in result', async () => {
+    const provider = makeProvider();
+    provider.complete.mockResolvedValueOnce(JSON.stringify({
+      title: null,
+      body: ['Текст'],
+      fields: {
+        recipient: { value: 'Петровой А.С.', quote: 'несуществующая цитата' },
+      },
+      changes: [],
+    }));
+
+    const result = await processDraft({
+      draft: DRAFT,
+      docType: DOC_TYPE,
+      userFields: {},
+      provider,
+      log: null,
+    });
+
+    expect(result.groundedFields).toHaveLength(1);
+    expect(result.groundedFields[0].key).toBe('recipient');
+    expect(result.groundedFields[0].reason).toBe('quote_not_in_source');
+    expect(result.aiFields.recipient).toBeNull();
+  });
+
+  it('retry uses stronger system instruction', async () => {
+    const provider = makeProvider();
+    provider.complete
+      .mockResolvedValueOnce('Not JSON at all')
+      .mockResolvedValueOnce(JSON.stringify({
+        title: null,
+        body: ['Retry'],
+        fields: {},
+        changes: [],
+      }));
+
+    await processDraft({
+      draft: 'Текст',
+      docType: { ...DOC_TYPE, fields: [] },
+      userFields: {},
+      provider,
+      log: null,
+    });
+
+    // Check retry call had stronger system instruction
+    const retryCall = provider.complete.mock.calls[1][0];
+    expect(retryCall[0].content).toContain('ВАЖНО');
+    expect(retryCall[0].role).toBe('system');
+  });
+
+  it('derived field (title) gets grounded via checkDerivedGrounding', async () => {
+    const provider = makeProvider();
+    const draftWithSender = 'Записка для Петровой А.С. от Иванова И.И. о командировке в Москву 01.01.2025';
+    // Title "О командировке" should be grounded in draft
+    provider.complete.mockResolvedValueOnce(JSON.stringify({
+      title: 'О командировке',
+      body: [draftWithSender],
+      fields: {
+        recipient: { value: 'Петровой А.С.', quote: 'для Петровой А.С.' },
+        sender: { value: 'Иванова И.И.', quote: 'от Иванова И.И.' },
+        date: { value: '01.01.2025', quote: '01.01.2025' },
+      },
+      changes: [],
+    }));
+
+    const result = await processDraft({
+      draft: draftWithSender,
+      docType: DOC_TYPE,
+      userFields: {},
+      provider,
+      log: null,
+    });
+
+    // Title should be preserved (grounded)
+    expect(result.title).toBe('О командировке');
+    expect(result.warnings).toHaveLength(0);
+  });
+
+  it('derived field in result.fields NOT grounded → null and groundedFields entry', async () => {
+    const provider = makeProvider();
+    const draftWithSender = 'Записка для Петровой А.С. от Иванова И.И. о командировке в Москву 01.01.2025';
+    // Add a derived field to docType
+    const docTypeWithDerived = {
+      ...DOC_TYPE,
+      fields: [
+        ...DOC_TYPE.fields,
+        { key: 'salutation', label: 'Обращение', kind: 'derived', required: false },
+      ],
+    };
+    // "Протокол совещания" has no words from the draft → should fail derived grounding
+    provider.complete.mockResolvedValueOnce(JSON.stringify({
+      title: null,
+      body: [draftWithSender],
+      fields: {
+        recipient: { value: 'Петровой А.С.', quote: 'для Петровой А.С.' },
+        sender: { value: 'Иванова И.И.', quote: 'от Иванова И.И.' },
+        date: { value: '01.01.2025', quote: '01.01.2025' },
+        salutation: { value: 'Протокол совещания', quote: 'Протокол совещания' },
+      },
+      changes: [],
+    }));
+
+    const result = await processDraft({
+      draft: draftWithSender,
+      docType: docTypeWithDerived,
+      userFields: {},
+      provider,
+      log: null,
+    });
+
+    // salutation is derived, not grounded → null
+    expect(result.aiFields.salutation).toBeNull();
+    expect(result.groundedFields.length).toBeGreaterThan(0);
+    expect(result.groundedFields.some(f => f.key === 'salutation')).toBe(true);
+  });
+
+  it('groundedFields array is empty when all fields pass grounding', async () => {
+    const provider = makeProvider();
+    const draftWithSender = 'Записка для Петровой А.С. от Иванова И.И. о командировке в Москву 01.01.2025';
+    provider.complete.mockResolvedValueOnce(JSON.stringify({
+      title: 'О командировке',
+      body: [draftWithSender],
+      fields: {
+        recipient: { value: 'Петровой А.С.', quote: 'для Петровой А.С.' },
+        sender: { value: 'Иванова И.И.', quote: 'от Иванова И.И.' },
+        date: { value: '01.01.2025', quote: '01.01.2025' },
+      },
+      changes: [],
+    }));
+
+    const result = await processDraft({
+      draft: draftWithSender,
+      docType: DOC_TYPE,
+      userFields: {},
+      provider,
+      log: null,
+    });
+
+    expect(result.groundedFields).toHaveLength(0);
+    expect(result.warnings).toHaveLength(0);
   });
 });
 

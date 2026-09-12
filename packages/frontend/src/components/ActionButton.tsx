@@ -23,14 +23,14 @@ export const ActionButton = memo(function ActionButton({
 
   return (
     <motion.div
-      whileTap={prefersReduced ? {} : { scale: 0.98 }}
+      whileTap={prefersReduced || disabled ? {} : { scale: 0.99 }}
       transition={{ duration: 0.1, ease: 'easeInOut' }}
     >
-      <Button onClick={onClick} disabled={disabled} className="w-full">
+      <Button onClick={onClick} disabled={disabled} className="w-full sm:w-auto sm:min-w-[280px]">
         {isStep1 ? (
           processing ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <Loader2 className="mr-2.5 h-[15px] w-[15px] animate-spin" strokeWidth={2} />
               Обработка…
             </>
           ) : (
@@ -38,12 +38,12 @@ export const ActionButton = memo(function ActionButton({
           )
         ) : generating ? (
           <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            <Loader2 className="mr-2.5 h-[15px] w-[15px] animate-spin" strokeWidth={2} />
             Формирование…
           </>
         ) : (
           <>
-            <Download className="mr-2 h-4 w-4" />
+            <Download className="mr-2.5 h-[15px] w-[15px]" strokeWidth={2} />
             2. Сформировать и скачать DOCX
           </>
         )}

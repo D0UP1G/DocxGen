@@ -11,8 +11,8 @@ pnpm install
 pnpm dev
 ```
 
-The `dev` script starts both the document service (`3001`) and the audio
-service (`3005`). If the browser was already open while changing this script,
+The `dev` script starts the backend (`PORT`, default `3000`) with in-process
+bot adapters, the audio service (`3005`), and the frontend. If the browser was already open while changing this script,
 stop the old processes and start `pnpm dev` again; Vite cannot start a service
 that was not part of an earlier process.
 
