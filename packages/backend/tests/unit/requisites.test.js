@@ -22,9 +22,9 @@ const memoDocType = {
 
 const classicTemplate = {
   id: 'classic',
-  organization: { name: 'ООО «Пример»', address: 'г. Москва, ул. Примерная, д. 1', phone: '+7 (000) 000-00-00' },
-  autoFill: { 'Дата': true },
-  dateFormat: 'DD.MM.YYYY',
+  organization: { name: '', address: 'г. Москва, ул. Примерная, д. 1', phone: '+7 (000) 000-00-00' },
+  autoFill: { date: true },
+  dateFormat: 'D MMMM YYYY г.',
 };
 
 const templateWithOrgFields = {
@@ -97,7 +97,7 @@ describe('mergeRequisites', () => {
         userFields: {},
         today: '2026-09-11',
       });
-      expect(result.values['Дата'].value).toBe('11.09.2026');
+      expect(result.values['Дата'].value).toBe('11 сентября 2026 г.');
       expect(result.values['Дата'].source).toBe('auto');
     });
 
@@ -205,7 +205,7 @@ describe('mergeRequisites', () => {
         userFields: {},
         today: '2026-09-11',
       });
-      expect(result.values.name.value).toBe('ООО «Пример»');
+      expect(result.values.name.value).toBe('');
       expect(result.values.name.source).toBe('template');
       expect(result.values.address.value).toBe('г. Москва, ул. Примерная, д. 1');
       expect(result.values.phone.value).toBe('+7 (000) 000-00-00');

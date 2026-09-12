@@ -29,8 +29,8 @@ describe('DOCX generation — classic template', () => {
     const buffer = await renderDocx(buildModel({ docTypeId: 'memo', templateId: 'classic' }));
     const zip = await JSZip.loadAsync(buffer);
     const docXml = await zip.file('word/document.xml').async('string');
-    // 20mm=1134, 10mm=567, 20mm=1134, 30mm=1701
-    expect(docXml).toContain('<w:pgMar w:top="1134" w:right="567" w:bottom="1134" w:left="1701"');
+    // 20mm=1134, 15mm=850, 20mm=1134, 30mm=1701
+    expect(docXml).toContain('<w:pgMar w:top="1134" w:right="850" w:bottom="1134" w:left="1701"');
   });
 
   it('has correct font and size', async () => {
@@ -57,8 +57,8 @@ describe('DOCX generation — modern template', () => {
     const buffer = await renderDocx(buildModel({ docTypeId: 'memo', templateId: 'modern' }));
     const zip = await JSZip.loadAsync(buffer);
     const docXml = await zip.file('word/document.xml').async('string');
-    // 25mm=1417, 15mm=850, 25mm=1417, 25mm=1417
-    expect(docXml).toContain('<w:pgMar w:top="1417" w:right="850" w:bottom="1417" w:left="1417"');
+    // 15mm=850, 15mm=850, 15mm=850, 25mm=1417
+    expect(docXml).toContain('<w:pgMar w:top="850" w:right="850" w:bottom="850" w:left="1417"');
     const stylesXml = await zip.file('word/styles.xml').async('string');
     expect(stylesXml).toContain('w:ascii="Arial"');
     // 12pt = 24 half-points
@@ -274,8 +274,8 @@ describe('DOCX generation — layout blocks', () => {
     const zip = await JSZip.loadAsync(buffer);
     const docXml = await zip.file('word/document.xml').async('string');
 
-    // orgHeader: organization name
-    expect(docXml).toContain('ООО «Пример»');
+    // orgHeader: organization address (name is now empty per ГОСТ compliance)
+    expect(docXml).toContain('г. Москва, ул. Примерная, д. 1');
     // addressee
     expect(docXml).toContain('Начальнику');
     // docTitle
@@ -330,7 +330,7 @@ describe('DOCX generation — layout blocks', () => {
     const headerFile = Object.keys(zip.files).find((f) => f.startsWith('word/header'));
     expect(headerFile).toBeDefined();
     const headerXml = await zip.file(headerFile).async('string');
-    expect(headerXml).toContain('ООО «Пример»');
+    expect(headerXml).not.toContain('ООО «Пример»');
   });
 });
 
@@ -380,7 +380,7 @@ describe('DOCX generation — header behavior', () => {
     const zip = await JSZip.loadAsync(buffer);
     const headerFile = Object.keys(zip.files).find((f) => f.startsWith('word/header'));
     const headerXml = await zip.file(headerFile).async('string');
-    expect(headerXml).toContain('ООО «Пример»');
+    expect(headerXml).not.toContain('ООО «Пример»');
     // Modern header.pageNumber = 'none', so no PageNumber in header
     expect(headerXml).not.toContain('PAGE');
   });

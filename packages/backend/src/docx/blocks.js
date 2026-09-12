@@ -1,4 +1,4 @@
-import { Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType } from 'docx';
+import { Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType, UnderlineType } from 'docx';
 import { mm, halfPt } from './units.js';
 
 /**
@@ -44,8 +44,13 @@ export function valueRuns(model, key) {
 // ── Block functions ─────────────────────────────────────────────────────────
 
 /**
- * Organization header — name and address from template.
+ * Organization header — name, INN/KPP/OGRN (ГОСТ), and address/phone from template.
  * For 'modern' template: empty (org is in the header).
+ *
+ * ГОСТ format:
+ *   [Название организации]
+ *   ИНН: [ИНН] КПП: [КПП] ОГРН: [ОГРН]
+ *   [Адрес] [Телефон]
  */
 function orgHeader(model) {
   const t = model.template;
@@ -54,8 +59,25 @@ function orgHeader(model) {
 
   const runs = [];
   runs.push(new TextRun({ text: t.organization.name, bold: cfg.bold }));
-  if (t.organization.address) {
-    runs.push(new TextRun({ text: `\n${t.organization.address}`, bold: cfg.bold }));
+
+  // ГОСТ: render ИНН/КПП/ОГРН if any are present in the organization object
+  const inn = t.organization.inn;
+  const kpp = t.organization.kpp;
+  const ogrn = t.organization.ogrn;
+  if (inn || kpp || ogrn) {
+    const idParts = [];
+    if (inn) idParts.push(`ИНН: ${inn}`);
+    if (kpp) idParts.push(`КПП: ${kpp}`);
+    if (ogrn) idParts.push(`ОГРН: ${ogrn}`);
+    runs.push(new TextRun({ text: `\n${idParts.join(' ')}`, bold: cfg.bold }));
+  }
+
+  // Address and phone on the same line (ГОСТ: [Адрес] [Телефон])
+  const contactParts = [];
+  if (t.organization.address) contactParts.push(t.organization.address);
+  if (t.organization.phone) contactParts.push(t.organization.phone);
+  if (contactParts.length > 0) {
+    runs.push(new TextRun({ text: `\n${contactParts.join(' ')}`, bold: cfg.bold }));
   }
 
   return [new Paragraph({
@@ -121,14 +143,17 @@ function docTitle(model) {
  * Date and number row.
  * "row" layout: both in one borderless table row.
  * "stack" layout: two separate paragraphs.
+ *
+ * ГОСТ: date is prefixed with "от" (e.g. "от 12 сентября 2026 г.").
  */
-function dateNumber(model) {
+function dateNumber(model, prefix = '№') {
   const cfg = model.template.blocks.dateNumber;
-  const dateRuns = valueRuns(model, 'Дата');
-  // For placeholder number, prepend "№ " so it reads "№ [Номер]"
+  // ГОСТ: prepend "от " to the date value
+  const dateRuns = [new TextRun('от '), ...valueRuns(model, 'Дата')];
+  // ГОСТ: prefix is configurable — letters use "Исх." (outgoing), others use "№".
   const numberParaRuns = model.values['Номер']?.value
-    ? [new TextRun(` № ${model.values['Номер'].value}`)]
-    : [new TextRun(' № '), ...valueRuns(model, 'Номер')];
+    ? [new TextRun(` ${prefix} ${model.values['Номер'].value}`)]
+    : [new TextRun(` ${prefix} `), ...valueRuns(model, 'Номер')];
 
   if (cfg.layout === 'row') {
     return [new Table({
@@ -203,6 +228,8 @@ function body(model) {
  * Memo/report: Должность автора + ФИО автора.
  * Letter: Должность подписывающего + ФИО подписывающего.
  *
+ * ГОСТ: underlined space for wet signature between position and name.
+ *
  * NOTE: Letter uses different field keys than other docTypes.
  */
 function signature(model) {
@@ -211,13 +238,22 @@ function signature(model) {
   const nameKey = isLetter ? 'ФИО подписывающего' : 'ФИО автора';
   const cfg = model.template.blocks.signature;
 
+  // ГОСТ: underlined line for wet signature
+  const underlineRun = new TextRun({
+    text: '____________________',
+    underline: { type: UnderlineType.SINGLE },
+  });
+
   if (cfg.layout === 'row') {
     return [new Table({
       rows: [new TableRow({
         children: [
           new TableCell({
             width: { size: 50, type: WidthType.PERCENTAGE },
-            children: [new Paragraph({ children: valueRuns(model, posKey) })],
+            children: [
+              new Paragraph({ children: valueRuns(model, posKey) }),
+              new Paragraph({ children: [underlineRun] }),
+            ],
             borders: noBorders(),
           }),
           new TableCell({
@@ -233,22 +269,196 @@ function signature(model) {
   // stack layout
   return [
     new Paragraph({ children: valueRuns(model, posKey) }),
+    new Paragraph({ children: [underlineRun] }),
     new Paragraph({ children: valueRuns(model, nameKey) }),
   ];
 }
 
 /**
  * Executor — small font at bottom, letter only.
+ *
+ * ГОСТ format:
+ *   Исп.: [ФИО исполнителя]
+ *   Тел.: [Телефон]
  */
 function executor(model) {
   if (!model.values['Исполнитель']?.value) return [];
   const t = model.template;
-  return [new Paragraph({
-    children: [new TextRun({
-      text: model.values['Исполнитель'].value,
-      size: halfPt(t.font.sizePt - 2),
-    })],
-  })];
+  const fontSize = halfPt(t.font.sizePt - 2);
+
+  // Phone: show value or placeholder
+  const phoneVal = model.values['Телефон исполнителя']?.value;
+  const phoneLabel = model.values['Телефон исполнителя']?.label ?? 'Телефон';
+  const phoneRuns = phoneVal
+    ? [new TextRun({ text: phoneVal, size: fontSize })]
+    : [new TextRun({
+        text: `[${phoneLabel}]`,
+        size: fontSize,
+        highlight: model.template.placeholder.highlight ?? undefined,
+      })];
+
+  return [
+    new Paragraph({
+      children: [
+        new TextRun({ text: 'Исп.: ', size: fontSize }),
+        new TextRun({ text: model.values['Исполнитель'].value, size: fontSize }),
+      ],
+    }),
+    new Paragraph({
+      children: [
+        new TextRun({ text: 'Тел.: ', size: fontSize }),
+        ...phoneRuns,
+      ],
+    }),
+  ];
+}
+
+/**
+ * Recipient block for letters — right-aligned.
+ * ГОСТ: shows Кому → Должность → ФИО as separate right-aligned paragraphs.
+ */
+function recipientBlock(model) {
+  if (model.docType.id !== 'letter') return [];
+
+  const fields = ['Кому', 'Должность получателя', 'ФИО получателя'];
+  const paragraphs = [];
+
+  for (const field of fields) {
+    const entry = model.values[field];
+    if (entry?.value || entry?.label) {
+      paragraphs.push(new Paragraph({
+        alignment: AlignmentType.RIGHT,
+        children: valueRuns(model, field),
+      }));
+    }
+  }
+
+  return paragraphs;
+}
+
+// ── ГОСТ blocks ──────────────────────────────────────────────────────────────
+
+/**
+ * Гриф утверждения — approval block.
+ * Top-right, before title. Shows УТВЕРЖДАЮ + position + signature line + name + date.
+ */
+function approvalBlock(model) {
+  const approval = model['Утверждение'] || model.approval;
+  if (!approval) return [];
+
+  return [
+    new Paragraph({
+      alignment: AlignmentType.RIGHT,
+      spacing: { after: 120 },
+      children: [new TextRun({ text: 'УТВЕРЖДАЮ', bold: true, size: halfPt(14) })],
+    }),
+    new Paragraph({
+      alignment: AlignmentType.RIGHT,
+      children: [new TextRun({ text: approval.position || '', size: halfPt(14) })],
+    }),
+    new Paragraph({
+      alignment: AlignmentType.RIGHT,
+      children: [
+        new TextRun({ text: '_________________  ', size: halfPt(14) }),
+        new TextRun({ text: approval.signature || '', size: halfPt(14) }),
+      ],
+    }),
+    new Paragraph({
+      alignment: AlignmentType.RIGHT,
+      children: [new TextRun({ text: approval.name || '', size: halfPt(14) })],
+    }),
+    new Paragraph({
+      alignment: AlignmentType.RIGHT,
+      children: [new TextRun({ text: approval.date || '', size: halfPt(14) })],
+    }),
+  ];
+}
+
+/**
+ * Согласовано — agreement block.
+ * Top-right, after approval block if both exist.
+ */
+function agreementBlock(model) {
+  const agreement = model['Согласование'] || model.agreement;
+  if (!agreement) return [];
+
+  return [
+    new Paragraph({
+      alignment: AlignmentType.RIGHT,
+      spacing: { after: 120 },
+      children: [new TextRun({ text: 'СОГЛАСОВАНО', bold: true, size: halfPt(14) })],
+    }),
+    new Paragraph({
+      alignment: AlignmentType.RIGHT,
+      children: [new TextRun({ text: agreement.position || '', size: halfPt(14) })],
+    }),
+    new Paragraph({
+      alignment: AlignmentType.RIGHT,
+      children: [
+        new TextRun({ text: '_________________  ', size: halfPt(14) }),
+        new TextRun({ text: agreement.signature || '', size: halfPt(14) }),
+      ],
+    }),
+    new Paragraph({
+      alignment: AlignmentType.RIGHT,
+      children: [new TextRun({ text: agreement.name || '', size: halfPt(14) })],
+    }),
+    new Paragraph({
+      alignment: AlignmentType.RIGHT,
+      children: [new TextRun({ text: agreement.date || '', size: halfPt(14) })],
+    }),
+  ];
+}
+
+/**
+ * Приложение — attachment list.
+ * After body, before signature. Lists document attachments.
+ */
+function attachmentBlock(model) {
+  const attachments = model['Приложение'] || model.attachments;
+  if (!attachments || !Array.isArray(attachments) || attachments.length === 0) return [];
+
+  const lines = [
+    new Paragraph({
+      spacing: { before: 240 },
+      children: [new TextRun({ text: 'Приложение:', bold: true, size: halfPt(14) })],
+    }),
+  ];
+
+  attachments.forEach((att, i) => {
+    lines.push(new Paragraph({
+      children: [new TextRun({ text: `${i + 1}. ${att}`, size: halfPt(14) })],
+    }));
+  });
+
+  return lines;
+}
+
+/**
+ * Копия — distribution/CC list.
+ * After signature, left-aligned. Lists recipients.
+ */
+function copyBlock(model) {
+  const copies = model['Копия'] || model.copies;
+  if (!copies || !Array.isArray(copies) || copies.length === 0) return [];
+
+  const lines = [
+    new Paragraph({
+      spacing: { before: 240 },
+      children: [new TextRun({ text: 'Копия:', bold: true, size: halfPt(14) })],
+    }),
+  ];
+
+  copies.forEach((copy) => {
+    const text = typeof copy === 'string'
+      ? copy
+      : `${copy.name || ''} — ${copy.position || ''}`;
+    lines.push(new Paragraph({
+      children: [new TextRun({ text, size: halfPt(14) })],
+    }));
+  });
+
+  return lines;
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -268,21 +478,37 @@ function noBorders() {
  * so layout builders only need to specify the sequence.
  */
 
-/** classic + memo: orgHeader → addressee → docTitle → dateNumber → title → body → signature */
+/** classic + memo: orgHeader → addressee → docTitle → dateNumber → approval → agreement → title → body → attachment → signature */
 function classicMemoLayout(model) {
   return [
     ...orgHeader(model),
     ...addressee(model),
     ...docTitle(model),
     ...dateNumber(model),
+    ...approvalBlock(model),
+    ...agreementBlock(model),
     ...title(model),
     ...body(model),
+    ...attachmentBlock(model),
     ...signature(model),
   ];
 }
 
-/** classic + report: same as classic + memo */
-const classicReportLayout = classicMemoLayout;
+/** classic + report: orgHeader → addressee → docTitle → dateNumber → approval → agreement → title → body → attachment → signature */
+function classicReportLayout(model) {
+  return [
+    ...orgHeader(model),
+    ...addressee(model),
+    ...docTitle(model),
+    ...dateNumber(model),
+    ...approvalBlock(model),
+    ...agreementBlock(model),
+    ...title(model),
+    ...body(model),
+    ...attachmentBlock(model),
+    ...signature(model),
+  ];
+}
 
 /** classic + reference: orgHeader → docTitle → dateNumber → title → body → signature */
 function classicReferenceLayout(model) {
@@ -296,34 +522,50 @@ function classicReferenceLayout(model) {
   ];
 }
 
-/** classic + letter: orgHeader → dateNumber → addressee → title → salutation → body → signature → executor */
+/** classic + letter: orgHeader → dateNumber("Исх.") → addressee → title → salutation → body → signature → copy → executor */
 function classicLetterLayout(model) {
   return [
     ...orgHeader(model),
-    ...dateNumber(model),
+    ...dateNumber(model, 'Исх.'),
     ...addressee(model),
     ...title(model),
     ...salutation(model),
     ...body(model),
     ...signature(model),
+    ...copyBlock(model),
     ...executor(model),
   ];
 }
 
-/** modern + memo: addressee → docTitle → dateNumber → title → body → signature */
+/** modern + memo: addressee → docTitle → dateNumber → approval → agreement → title → body → attachment → signature */
 function modernMemoLayout(model) {
   return [
     ...addressee(model),
     ...docTitle(model),
     ...dateNumber(model),
+    ...approvalBlock(model),
+    ...agreementBlock(model),
     ...title(model),
     ...body(model),
+    ...attachmentBlock(model),
     ...signature(model),
   ];
 }
 
-/** modern + report: same as modern + memo */
-const modernReportLayout = modernMemoLayout;
+/** modern + report: addressee → docTitle → dateNumber → approval → agreement → title → body → attachment → signature */
+function modernReportLayout(model) {
+  return [
+    ...addressee(model),
+    ...docTitle(model),
+    ...dateNumber(model),
+    ...approvalBlock(model),
+    ...agreementBlock(model),
+    ...title(model),
+    ...body(model),
+    ...attachmentBlock(model),
+    ...signature(model),
+  ];
+}
 
 /** modern + reference: docTitle → dateNumber → title → body → signature */
 function modernReferenceLayout(model) {
@@ -336,15 +578,16 @@ function modernReferenceLayout(model) {
   ];
 }
 
-/** modern + letter: dateNumber → addressee → title → salutation → body → signature → executor */
+/** modern + letter: dateNumber("Исх.") → addressee → title → salutation → body → signature → copy → executor */
 function modernLetterLayout(model) {
   return [
-    ...dateNumber(model),
+    ...dateNumber(model, 'Исх.'),
     ...addressee(model),
     ...title(model),
     ...salutation(model),
     ...body(model),
     ...signature(model),
+    ...copyBlock(model),
     ...executor(model),
   ];
 }
@@ -400,4 +643,9 @@ export const BLOCKS = {
   body,
   signature,
   executor,
+  recipientBlock,
+  approvalBlock,
+  agreementBlock,
+  attachmentBlock,
+  copyBlock,
 };

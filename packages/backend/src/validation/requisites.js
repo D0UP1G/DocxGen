@@ -70,7 +70,7 @@ export function mergeRequisites({ docType, template, aiFields, title, userFields
       source = 'ai';
     }
     // Priority 4: Auto value (date) — key is "Дата" now, not "date"
-    else if (field.kind === 'auto' && fieldKey === 'Дата' && template.autoFill?.['Дата']) {
+    else if (field.kind === 'auto' && fieldKey === 'Дата' && template.autoFill?.date) {
       value = formatDate(today, template.dateFormat);
       source = 'auto';
     }
@@ -134,13 +134,16 @@ function formatDate(isoDate, format) {
   // UTC-геттеры: 'YYYY-MM-DD' разбирается как полночь UTC, и в часовых поясах западнее Гринвича
   // локальные getDate()/getMonth() дали бы предыдущий день.
   const d = new Date(isoDate);
-  const day = String(d.getUTCDate()).padStart(2, '0');
-  const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dayNum = d.getUTCDate();
+  const monthIdx = d.getUTCMonth();
   const year = String(d.getUTCFullYear());
+  const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
 
   return format
-    .replace('DD', day)
-    .replace('MM', month)
-    .replace('YYYY', year)
-    .replace('YY', year.slice(-2));
+    .replace(/MMMM/g, months[monthIdx])
+    .replace(/DD/g, String(dayNum).padStart(2, '0'))
+    .replace(/D/g, String(dayNum))
+    .replace(/MM/g, String(monthIdx + 1).padStart(2, '0'))
+    .replace(/YYYY/g, year)
+    .replace(/YY/g, year.slice(-2));
 }
