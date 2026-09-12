@@ -27,6 +27,16 @@ export function createQueue(db) {
     LIMIT ?
   `);
 
+  // Worker asks only for kinds it can execute. The filter also keeps the queue
+  // safe for future auxiliary workers that may share the same database.
+  const readyJobsOfKinds = (count) => db.prepare(`
+    SELECT * FROM jobs
+    WHERE status = 'queued' AND run_after <= datetime('now')
+      AND kind IN (${Array(count).fill('?').join(', ')})
+    ORDER BY created_at ASC
+    LIMIT ?
+  `);
+
   const markRunning = db.prepare(`
     UPDATE jobs SET status = 'running', updated_at = datetime('now')
     WHERE id = ? AND status = 'queued'
@@ -80,10 +90,14 @@ export function createQueue(db) {
     /**
      * Dequeue up to `limit` ready jobs and mark them running.
      * @param {number} limit
+     * @param {string[]} [kinds] - виды задач, которые вызывающий умеет выполнять;
+     *   пусто или не передано — берутся любые
      * @returns {object[]}
      */
-    dequeue(limit = 2) {
-      const jobs = readyJobs.all(limit);
+    dequeue(limit = 2, kinds = []) {
+      const jobs = kinds.length > 0
+        ? readyJobsOfKinds(kinds.length).all(...kinds, limit)
+        : readyJobs.all(limit);
       const running = [];
       for (const job of jobs) {
         const result = markRunning.run(job.id);

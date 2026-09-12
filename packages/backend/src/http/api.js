@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { rateLimiter } from './rateLimiter.js';
 import { apiKeyAuth } from './apiKeyAuth.js';
+import { ownerHeaders } from './ownerHeaders.js';
 
 /**
  * REST API router — all document methods delegate to documentService.
@@ -15,11 +16,11 @@ import { apiKeyAuth } from './apiKeyAuth.js';
  * - Express 5: async route handlers are supported natively
  * - Health endpoint is always available; document routes require deps
  *
- * @param {{ documentService?: object, docTypes?: object, templates?: object, fileStorage?: object, db?: object, log?: object }} deps
+ * @param {{ documentService?: object, docTypes?: object, templates?: object, fileStorage?: object, db?: object, log?: object, apiKey?: string }} deps
  * @returns {Router}
  */
 export function createApiRouter(deps = {}) {
-  const { documentService, docTypes, templates, fileStorage, log } = deps;
+  const { documentService, docTypes, templates, fileStorage, log, faultManager, debugCommands } = deps;
   const router = Router();
 
   // Rate limit mutating routes only (POST/PUT/PATCH/DELETE)
@@ -50,24 +51,31 @@ export function createApiRouter(deps = {}) {
     });
   });
 
-  // ── API Key Auth — all /api/* routes require valid X-API-Key ─────────────
-  // Health endpoint above is NOT under /api, so it bypasses this middleware.
-  // If API_KEY env is not set, middleware is a no-op (backward compatible).
-  router.use('/api', apiKeyAuth());
+  // ── API Key Auth — проверяет ключ, если он предъявлен ────────────────────
+  // Веб-клиент публичный: ключа у него нет, он приходит с cookie сессии и работает
+  // от своего имени. Охраняется не доступ к API, а возможность выдать себя за
+  // другого владельца — это ниже, в ownerHeaders().
+  // Ключ можно передать через deps (тесты), иначе берётся из env.
+  router.use('/api', apiKeyAuth({ apiKey: deps.apiKey }));
 
   // ── Owner extraction from headers — for API-to-API calls ──────────────────
-  // When the bot service calls via REST client with X-API-Key, it also sends
-  // X-Owner-Platform and X-Owner-Id headers to identify the user.
-  // This middleware overrides the session-based owner for these requests.
-  // For web clients (session cookies), the session middleware's owner is kept.
-  router.use('/api', (req, res, next) => {
-    const platform = req.headers['x-owner-platform'];
-    const id = req.headers['x-owner-id'];
-    if (platform && id) {
-      req.owner = { platform, id };
-    }
-    next();
-  });
+  // Заголовки владельца принимаются только после подтверждённого ключа:
+  // req.owner решает, чьи документы вернёт сервис. Веб-клиенты сюда не попадают —
+  // у них владелец остаётся из cookie сессии.
+  router.use('/api', ownerHeaders());
+
+  // ── Debug: имитация сбоя ИИ (сценарий 6, /ai_fail) ────────────────────────
+  // ИИ работает в этом backend, а команда из локального/мессенджерного адаптера
+  // может взвести флаг через REST-вызов от имени того же владельца.
+  // Ручки просто нет, когда DEBUG_COMMANDS выключен — на публичном сервере её не найти.
+  if (faultManager && debugCommands) {
+    router.post('/api/debug/ai-fault', mutate, async (req, res) => {
+      const ownerKey = `${req.owner.platform}:${req.owner.id}`;
+      faultManager.armOnce(ownerKey);
+      log?.debug?.({ ownerKey }, 'имитация сбоя ИИ взведена');
+      res.status(202).json({ armed: true });
+    });
+  }
 
   // ── Catalog ───────────────────────────────────────────────────────────────
 
@@ -168,6 +176,14 @@ export function createApiRouter(deps = {}) {
     res.status(202).json({ jobId: result.job.id, reused: result.reused });
   });
 
+  // Повтор после сбоя ИИ — отдельный маршрут, а не повторный /process: тот идемпотентен
+  // по ключу и на повторе вернул бы старую упавшую задачу, а документ навсегда завис бы в processing.
+  router.post('/api/documents/:id/retry', mutate, async (req, res) => {
+    const owner = req.owner;
+    const result = documentService.retryProcessing(owner, req.params.id);
+    res.status(202).json({ jobId: result.job.id, reused: result.reused });
+  });
+
   // ── Fields ────────────────────────────────────────────────────────────────
 
   router.put('/api/documents/:id/fields', mutate, async (req, res) => {
@@ -223,8 +239,8 @@ export function createApiRouter(deps = {}) {
     const { fileId } = req.params;
 
     try {
-      // Look up file path from database
-      const file = deps.db.prepare('SELECT * FROM files WHERE id = ?').get(fileId);
+      // File IDs are opaque, but ownership is still checked at the service boundary.
+      const file = documentService.getFile(req.owner, fileId);
       if (!file || !fs.existsSync(file.path)) {
         res.status(404).json({ error: { code: 'NOT_FOUND', message: 'File not found' } });
         return;
@@ -243,6 +259,10 @@ export function createApiRouter(deps = {}) {
       res.end(buffer);
     } catch (err) {
       deps.log?.error({ err }, 'File download error');
+      if (err?.status && err?.code) {
+        res.status(err.status).json({ error: { code: err.code, message: err.message } });
+        return;
+      }
       res.status(500).json({ error: { code: 'INTERNAL', message: 'Failed to download file' } });
     }
   });

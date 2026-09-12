@@ -11,9 +11,8 @@ const flag = (defaultValue = false) => z.preprocess(
 
 const envSchema = z.object({
   // Server
+  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(3000),
-  DOCUMENT_SERVICE_PORT: z.coerce.number().default(3001),
-  BOT_PORT: z.coerce.number().default(3002),
   PUBLIC_URL: z.string().url().default('https://doc3steps.example.ru'),
   DATA_DIR: z.string().default('./data'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
@@ -60,10 +59,12 @@ const envSchema = z.object({
 
   // API Key authentication for Document Service
   API_KEY: z.string().default(''),
-  DOCUMENT_SERVICE_URL: z.string().url().default('http://localhost:3001'),
+  // Остаток совместимости для внешнего REST-клиента; внутренние адаптеры работают напрямую.
+  DOCUMENT_POLL_INTERVAL_MS: z.coerce.number().positive().default(5000),
 
   // Cleanup
   CLEANUP_ENABLED: flag(true),
+  CLEANUP_INTERVAL_MS: z.coerce.number().positive().default(60 * 60 * 1000),
   CLEANUP_FILE_MAX_AGE_HOURS: z.coerce.number().positive().default(24),
   CLEANUP_LOG_MAX_AGE_DAYS: z.coerce.number().positive().default(30),
 });
@@ -79,6 +80,17 @@ function loadEnv() {
   }
 
   const env = parsed.data;
+
+  // Без API_KEY межсервисная аутентификация выключена, а значит сервисы ботов не смогут
+  // действовать от имени пользователя. В разработке это допустимо (предупреждение при старте),
+  // на проде — нет: пустой ключ однажды уедет на сервер и откроет чужие документы.
+  if (env.NODE_ENV === 'production' && !env.API_KEY) {
+    throw new Error(
+      'NODE_ENV=production requires API_KEY. ' +
+      'Generate one with: node -e "console.log(crypto.randomBytes(32).toString(\'hex\'))" ' +
+      'and set it for the backend process.'
+    );
+  }
 
   // Cross-field validation: MAX_ENABLED requires MAX_TOKEN
   if (env.MAX_ENABLED && !env.MAX_TOKEN) {

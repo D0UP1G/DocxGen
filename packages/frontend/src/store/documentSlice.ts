@@ -73,10 +73,27 @@ export const processText = createAsyncThunk<
     }
     if (current.status === 'ai_failed') return rejectWithValue(current.error ?? 'Обработка текста не удалась');
     if (!current.version) return rejectWithValue('Сервер не вернул обработанный документ');
+    const aiRequisites = Object.fromEntries(
+      Object.entries(current.version.aiFields ?? {}).map(([key, field]) => [
+        key,
+        typeof field === 'object' && field !== null && 'value' in field
+          ? String((field as { value: unknown }).value)
+          : String(field ?? ''),
+      ]),
+    );
+    const warnings = (current.version.warnings ?? []).map((warning) => (
+      typeof warning === 'string'
+        ? warning
+        : `${warning.key ?? 'Реквизит'}: ${warning.reason ?? 'проверка не пройдена'}`
+    ));
+
     return {
       correctedText: current.version.body.join('\n'),
-      requisites: { ...current.version.aiFields, ...current.userFields },
-      validation: { missing: [], warnings: current.version.warnings ?? [] },
+      requisites: { ...aiRequisites, ...current.userFields },
+      validation: {
+        missing: (current.pending ?? []).map(({ key, label }) => ({ field: key, label })),
+        warnings,
+      },
       source: current.id,
       documentId: current.id,
     } as ProcessResponse & { documentId: string };
@@ -102,7 +119,8 @@ export const generateDocument = createAsyncThunk<
 >(
   'document/generateDocument',
   async (
-    { text, correctedText, requisites, documentType, templateId },
+    // Тип и шаблон уже сохранены на сервере при создании документа — рендеру достаточно его id
+    { correctedText, requisites },
     { getState, rejectWithValue },
   ) => {
     try {

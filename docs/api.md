@@ -12,6 +12,11 @@ Ownership is enforced via cookies. The server creates a `sid` cookie on first re
 
 **No login required.** The cookie IS the identity.
 
+Trusted external integrations may send `X-API-Key` together with
+`X-Owner-Platform` (`max`, `vk` or `local`) and `X-Owner-Id`. These headers are
+accepted only when the API key matches `API_KEY`; browser sessions should omit
+them.
+
 ---
 
 ## Endpoints
@@ -203,6 +208,20 @@ Starts AI processing. Requires: `sourceText`, `docType`, `templateId`.
 **Curl:**
 ```bash
 curl -X POST http://localhost:3000/api/documents/{id}/process
+```
+
+### Retry after AI failure
+
+```
+POST /api/documents/:id/retry
+```
+
+Queues a new attempt only when the document is in `ai_failed`. It does not reuse
+the failed `/process` idempotency key.
+
+**Response (202):**
+```json
+{ "jobId": "uuid", "reused": false }
 ```
 
 ---

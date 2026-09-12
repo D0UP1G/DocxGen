@@ -1,14 +1,14 @@
 /**
  * Notifier — bridges document lifecycle events to dialog conversations.
  *
- * Uses polling to check document status via REST client.
+ * Uses polling to check document status through the document-service client.
  * Maintains a Set of document IDs to poll and checks their status periodically.
  *
  * Dependencies are injected (Dependency Inversion):
  *   dispatcher — for findByDocumentId
  *   flow — for onDocumentEvent
  *   adapters — Map<string, Adapter>
- *   docServiceClient — REST client (for polling)
+ *   docServiceClient — owner-bound document-service client (for polling)
  *   log — pino-compatible logger
  */
 
@@ -27,16 +27,20 @@ const systemEvent = (conv, kind, documentId) => ({
  */
 export function createNotifier({ dispatcher, flow, adapters, docServiceClient, log, pollIntervalMs = 5_000 }) {
   // ── Document tracking for polling ──────────────────────────────────
-  const trackedDocs = new Map(); // documentId → { status: string, lastCheck: number }
+  const trackedDocs = new Map(); // documentId → { owner, status: string, lastCheck: number }
 
   /**
    * Track a document for polling. Called by flow when processing starts.
+   *
+   * Владелец хранится рядом с идентификатором: сервис документов отдаёт документ
+   * только его владельцу, поэтому опрашивать надо от его имени.
    * @param {string} documentId
+   * @param {{ platform: string, id: string }} owner
    * @param {string} initialStatus — e.g. 'processing'
    */
-  function trackDocument(documentId, initialStatus = 'processing') {
-    trackedDocs.set(documentId, { status: initialStatus, lastCheck: Date.now() });
-    log.debug({ documentId }, 'tracking document for polling');
+  function trackDocument(documentId, owner, initialStatus = 'processing') {
+    trackedDocs.set(documentId, { owner, status: initialStatus, lastCheck: Date.now() });
+    log.debug({ documentId, owner }, 'tracking document for polling');
   }
 
   /**
@@ -77,7 +81,8 @@ export function createNotifier({ dispatcher, flow, adapters, docServiceClient, l
 
     for (const [documentId, info] of trackedDocs) {
       try {
-        const doc = await docServiceClient.getDocument(documentId);
+        const client = info.owner ? docServiceClient.withOwner(info.owner) : docServiceClient;
+        const doc = await client.getDocument(documentId);
         if (!doc) {
           // Document deleted or not found — stop tracking
           trackedDocs.delete(documentId);

@@ -15,7 +15,9 @@
  * @param {{ baseUrl: string, apiKey: string, owner?: { platform: string, id: string }, timeoutMs?: number }} config
  */
 export function createDocumentServiceClient({ baseUrl, apiKey, owner, timeoutMs = 30_000 } = {}) {
-  const base = (baseUrl || 'http://localhost:3001').replace(/\/+$/, '');
+  // The repository runs one backend process. A separate URL can still be
+  // supplied for external deployments, but the local default is the public API.
+  const base = (baseUrl || 'http://localhost:3000').replace(/\/+$/, '');
 
   /**
    * Core fetch wrapper — adds API key header, handles errors, parses JSON.
@@ -106,6 +108,11 @@ export function createDocumentServiceClient({ baseUrl, apiKey, owner, timeoutMs 
       });
     },
 
+    /** Взвести имитацию сбоя ИИ для текущего владельца (/ai_fail, сценарий 6). */
+    async armAiFault() {
+      return request('/api/debug/ai-fault', { method: 'POST' });
+    },
+
     /** Update a document (type, template, or draft text). */
     async updateDocument(id, { sourceText, docType, templateId } = {}) {
       return request(`/api/documents/${encodeURIComponent(id)}`, {
@@ -157,7 +164,7 @@ export function createDocumentServiceClient({ baseUrl, apiKey, owner, timeoutMs 
 
     /** Retry processing from ai_failed status. Maps to same endpoint as processDocument. */
     async retryProcessing(id) {
-      return request(`/api/documents/${encodeURIComponent(id)}/process`, {
+      return request(`/api/documents/${encodeURIComponent(id)}/retry`, {
         method: 'POST',
         body: JSON.stringify({}),
       });

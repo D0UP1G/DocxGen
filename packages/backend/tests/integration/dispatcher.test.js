@@ -70,7 +70,7 @@ function createMockFlow() {
 }
 
 function createMockLog() {
-  return { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+  return { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────

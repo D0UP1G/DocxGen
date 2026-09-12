@@ -1,16 +1,29 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import path from 'path'
+import path from 'node:path'
 
-export default defineConfig({
-  plugins: [react(), tailwindcss()],
-  server: {
-      proxy: { '/api': 'http://localhost:3001', '/health': 'http://localhost:3001' },
-  },
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
+// Единственный backend слушает PORT. Прокси должен использовать тот же порт,
+// иначе запросы /api молча упираются в ECONNREFUSED.
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, path.resolve(import.meta.dirname, '../..'), '')
+  const target = `http://localhost:${env.PORT || '3000'}`
+
+  return {
+    plugins: [react(), tailwindcss()],
+    server: {
+      // По умолчанию Vite слушает только ::1, и http://localhost по IPv4 упирается в
+      // «отказано в подключении». 127.0.0.1 доступен и как localhost, и напрямую.
+      host: '127.0.0.1',
+      proxy: {
+        '/api': target,
+        '/health': target,
+      },
     },
-  },
+    resolve: {
+      alias: {
+        '@': path.resolve(import.meta.dirname, './src'),
+      },
+    },
+  }
 })

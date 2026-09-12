@@ -33,15 +33,24 @@ export async function processDraft({ draft, docType, userFields, provider, log, 
   // Step 1: Build messages and call AI
   const messages = buildMessages({ draft, docType });
 
+  log?.debug({
+    provider: provider.name,
+    draftLength: draft.length,
+    docType: docType?.id ?? docType,
+    promptChars: messages.reduce((sum, m) => sum + m.content.length, 0),
+  }, 'запрос к ИИ отправлен');
+
   let raw;
+  const aiStartedAt = Date.now();
   try {
     raw = await provider.complete(messages);
   } catch (err) {
+    log?.warn({ provider: provider.name, ms: Date.now() - aiStartedAt, error: err.message }, 'вызов ИИ не удался');
     if (err instanceof AiUnavailableError) throw err;
     throw new AiUnavailableError(`AI call failed: ${err.message}`);
   }
 
-  log?.debug({ rawLength: raw.length }, 'ai_raw');
+  log?.debug({ provider: provider.name, ms: Date.now() - aiStartedAt, rawLength: raw.length, raw }, 'ответ ИИ получен');
 
   // Step 2: Parse JSON (with one retry — rebuild messages with stronger instruction)
   let parsed;
@@ -109,16 +118,13 @@ export async function processDraft({ draft, docType, userFields, provider, log, 
     aiFields[key] = fieldVal;
   }
 
-  // H1 continued: Ground the top-level title field (not in result.fields)
-  if (result.title) {
-    const titleCheck = checkDerivedGrounding(result.title, draft);
-    if (!titleCheck.ok) {
-      log?.debug({ key: 'title', reason: titleCheck.reason }, 'derived_field_grounding_failed');
-      warnings.push({ key: 'title', reason: titleCheck.reason, severity: 'grounding' });
-      groundedFields.push({ key: 'title', reason: titleCheck.reason });
-      result = { ...result, title: null };
-    }
-  }
+  log?.debug({
+    title: result.title,
+    paragraphs: result.body.length,
+    fields: Object.fromEntries(Object.entries(aiFields).map(([key, val]) => [key, val?.value ?? null])),
+    changes: result.changes,
+    warnings: warnings.map((w) => `${w.key}: ${w.reason}`),
+  }, 'ответ ИИ разобран и проверен');
 
   return {
     title: result.title,

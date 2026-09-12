@@ -1,6 +1,5 @@
 import { memo } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { AlertTriangle } from 'lucide-react';
 import type { MissingField } from '@/types/document';
 
 interface ValidationAlertProps {
@@ -8,6 +7,10 @@ interface ValidationAlertProps {
   warnings: string[];
 }
 
+/**
+ * Предупреждение живёт на волосяной линии, без плашки: это не ошибка, а
+ * замечание по дороге. Пустые реквизиты названы поимённо, чтобы не гадать.
+ */
 export const ValidationAlert = memo(function ValidationAlert({
   missingFields,
   warnings,
@@ -20,28 +23,29 @@ export const ValidationAlert = memo(function ValidationAlert({
       {show && (
         <motion.div
           key="validation-alert"
-          initial={prefersReduced ? false : { opacity: 0, scale: 0.98 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={prefersReduced ? {} : { opacity: 0, scale: 0.98 }}
+          initial={prefersReduced ? false : { opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={prefersReduced ? {} : { opacity: 0, y: -6 }}
           transition={{ duration: 0.25, ease: 'easeOut' }}
-          className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800"
+          className="border-t border-border pt-6"
         >
-          <div className="flex items-center gap-2 font-medium">
-            <AlertTriangle className="h-4 w-4" />
-            Проверьте реквизиты
-          </div>
+          <span className="label-caps text-warning">Проверьте реквизиты</span>
           {missingFields.length > 0 && (
-            <ul className="mt-2 list-disc pl-5">
+            <ul className="mt-3 space-y-1.5">
               {missingFields.map((field) => (
-                <li key={field.field}>
-                  {field.label} — заполните или оставьте понятную отметку
+                <li key={field.field} className="text-base leading-7">
+                  <span className="font-medium">{field.label}</span>
+                  <span className="text-muted-foreground"> — заполните или оставьте понятную отметку</span>
                 </li>
               ))}
             </ul>
           )}
           {warnings.map((warning) => (
-            <p key={warning} className="mt-1">{warning}</p>
+            <p key={warning} className="mt-2 text-base leading-7 text-muted-foreground">{warning}</p>
           ))}
+          <p className="mt-3 text-sm text-muted-foreground">
+            Незаполненное попадёт в документ жёлтой пометкой — заметный пробел лучше выдуманного значения.
+          </p>
         </motion.div>
       )}
     </AnimatePresence>

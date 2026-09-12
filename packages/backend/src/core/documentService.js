@@ -118,6 +118,26 @@ export function createDocumentService({ db, queue, fileStorage, docTypes, templa
   function toView(doc) {
     if (!doc) return null;
     const version = doc.current_version_id ? getVersion.get(doc.current_version_id) : null;
+    const aiFields = version ? JSON.parse(version.ai_fields || '{}') : {};
+    const userFields = JSON.parse(doc.user_fields || '{}');
+    let pending = [];
+    let placeholders = [];
+    if (version && doc.doc_type && doc.template_id) {
+      const docType = docTypes.get(doc.doc_type);
+      const { template } = templates.get(doc.template_id);
+      if (docType && template) {
+        const merged = mergeRequisites({
+          docType,
+          template,
+          aiFields,
+          title: version.title,
+          userFields,
+          today: new Date().toISOString().slice(0, 10),
+        });
+        pending = merged.pending;
+        placeholders = merged.placeholders;
+      }
+    }
     return {
       id: doc.id,
       status: doc.status,
@@ -125,7 +145,7 @@ export function createDocumentService({ db, queue, fileStorage, docTypes, templa
       templateId: doc.template_id,
       sourceText: doc.source_text,
       draftVersion: doc.draft_version,
-      userFields: JSON.parse(doc.user_fields || '{}'),
+      userFields,
       version: version ? {
         id: version.id,
         kind: version.kind,
@@ -133,14 +153,14 @@ export function createDocumentService({ db, queue, fileStorage, docTypes, templa
         body: JSON.parse(version.body || '[]'),
         // Requisites extracted by the AI and verified by grounding — the dialog and render need them,
         // otherwise the bot asks the user for values the AI already found.
-        aiFields: JSON.parse(version.ai_fields || '{}'),
+        aiFields,
         changes: JSON.parse(version.changes || '[]'),
         warnings: JSON.parse(version.warnings || '[]'),
         // A version is stale when the draft OR the document type changed after processing.
         stale: version.draft_version !== doc.draft_version || version.doc_type !== doc.doc_type,
       } : null,
-      pending: [],  // Will be computed by caller using mergeRequisites
-      placeholders: [],
+      pending,
+      placeholders,
       error: doc.last_error,
       createdAt: doc.created_at,
       updatedAt: doc.updated_at,
@@ -165,6 +185,7 @@ export function createDocumentService({ db, queue, fileStorage, docTypes, templa
         docType: null, templateId: null, sourceText: '',
         draftVersion: 0, userFields: '{}', status: 'draft', now: n,
       });
+      log?.debug({ documentId: id, owner: `${owner.platform}:${owner.id}` }, 'документ создан');
       return toView(getDoc.get(id));
     },
 
@@ -200,6 +221,7 @@ export function createDocumentService({ db, queue, fileStorage, docTypes, templa
         currentVersionId: doc.current_version_id, lastError: doc.last_error, now: now(),
       });
 
+      log?.debug({ documentId: id, mode, added: text.length, total: newSource.length, draftVersion: newVersion }, 'черновик обновлён');
       return toView(getDoc.get(id));
     },
 
@@ -228,6 +250,7 @@ export function createDocumentService({ db, queue, fileStorage, docTypes, templa
         currentVersionId, lastError: null, now: now(),
       });
 
+      log?.debug({ documentId: id, docType: typeId }, 'выбран тип документа');
       return toView(getDoc.get(id));
     },
 
@@ -253,6 +276,7 @@ export function createDocumentService({ db, queue, fileStorage, docTypes, templa
         currentVersionId: doc.current_version_id, lastError: null, now: now(),
       });
 
+      log?.debug({ documentId: id, templateId }, 'выбран шаблон');
       return toView(getDoc.get(id));
     },
 
@@ -287,6 +311,7 @@ export function createDocumentService({ db, queue, fileStorage, docTypes, templa
         currentVersionId: doc.current_version_id, lastError: null, now: now(),
       });
 
+      log?.debug({ documentId: id, jobId: job?.id, reused, draftVersion: doc.draft_version, docType: doc.doc_type, draftLength: doc.source_text.length }, 'обработка ИИ поставлена в очередь');
       return { job, reused };
     },
 
@@ -323,6 +348,7 @@ export function createDocumentService({ db, queue, fileStorage, docTypes, templa
         currentVersionId: doc.current_version_id, lastError: null, now: now(),
       });
 
+      log?.debug({ documentId: id, jobId: job?.id, reused, draftVersion: doc.draft_version, docType: doc.doc_type, draftLength: doc.source_text.length }, 'обработка ИИ поставлена в очередь');
       return { job, reused };
     },
 
@@ -512,6 +538,7 @@ export function createDocumentService({ db, queue, fileStorage, docTypes, templa
       // Check if file already cached
       const existing = findFile.get(version.id, doc.template_id, fieldsHash);
       if (existing) {
+        log?.debug({ documentId: id, fileId: existing.id, templateId: doc.template_id }, 'DOCX взят из кеша');
         return { file: existing, fallback: fallback?.requestedId || null, placeholders: JSON.parse(existing.placeholders || '[]') };
       }
 
@@ -526,6 +553,11 @@ export function createDocumentService({ db, queue, fileStorage, docTypes, templa
         now: now(),
       });
 
+      log?.debug({
+        documentId: id, fileId, filename, bytes: buffer.length,
+        templateId: doc.template_id, fallback: fallback?.requestedId ?? null,
+        placeholders: placeholders.map((p) => p.key ?? p),
+      }, 'DOCX собран');
       return { file: getFile.get(fileId), fallback: fallback?.requestedId || null, placeholders };
     },
 
@@ -540,6 +572,18 @@ export function createDocumentService({ db, queue, fileStorage, docTypes, templa
       const doc = getDocByOwner.get(id, owner.platform, owner.id);
       ensureOwner(doc, owner);
       return toView(doc);
+    },
+
+    /**
+     * Get a rendered file after checking the document owner.
+     * File IDs are opaque UUIDs, but opacity is not an authorization boundary.
+     */
+    getFile(owner, fileId) {
+      const file = getFile.get(fileId);
+      if (!file) throw new DomainError('NOT_FOUND', 'File not found', 404);
+      const doc = getDocByOwner.get(file.document_id, owner.platform, owner.id);
+      ensureOwner(doc, owner);
+      return file;
     },
 
     /**

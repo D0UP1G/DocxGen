@@ -21,8 +21,9 @@ export function startWorker({ db, queue, handlers, concurrency = 2, pollMs = 500
   async function poll() {
     if (!running || activeCount >= concurrency) return;
 
-    const jobs = queue.dequeue(concurrency - activeCount);
+    const jobs = queue.dequeue(concurrency - activeCount, Object.keys(handlers));
     for (const job of jobs) {
+      log.debug({ jobId: job.id, kind: job.kind, documentId: job.document_id, attempt: (job.attempts ?? 0) + 1, maxAttempts: job.max_attempts }, 'задача взята в работу');
       activeCount++;
       processJob(job).finally(() => {
         activeCount--;
@@ -44,14 +45,15 @@ export function startWorker({ db, queue, handlers, concurrency = 2, pollMs = 500
       return;
     }
 
+    const startedAt = Date.now();
     try {
       const result = await handler(job);
       if (result === 'stale') {
         queue.stale(job.id);
-        log.info({ jobId: job.id }, 'job stale');
+        log.info({ jobId: job.id, kind: job.kind, documentId: job.document_id, ms: Date.now() - startedAt }, 'job stale');
       } else {
         queue.done(job.id);
-        log.info({ jobId: job.id }, 'job done');
+        log.info({ jobId: job.id, kind: job.kind, documentId: job.document_id, ms: Date.now() - startedAt }, 'job done');
       }
     } catch (err) {
       if ((err instanceof AiUnavailableError || err instanceof AiInvalidResponseError) && err.retryable !== false) {

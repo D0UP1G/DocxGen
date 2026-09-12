@@ -28,7 +28,7 @@ import { renderDocx } from './docx/render.js';
 import { createAiProvider } from './ai/provider.js';
 import { AiFaultManager } from './ai/faults.js';
 import { processDraft } from './ai/processDraft.js';
-import { createDocumentServiceClient } from './client/index.js';
+import { createLocalDocumentServiceClient } from './client/localDocumentServiceClient.js';
 import { createFlow } from './bot/flow.js';
 import { createDispatcher } from './bot/dispatcher.js';
 import { createNotifier } from './bot/notifier.js';
@@ -68,22 +68,26 @@ export function createRuntime(config = env, { db: passedDb, log: logger = log } 
   const provider = createAiProvider(config);
   const faultManager = new AiFaultManager(config);
 
+  const cleanup = createCleanupHandler({ db, dataDir, log: logger, env: config });
   const handlers = {
     process: createProcessDocumentHandler({ documentService, processDraft, docTypes, provider, faultManager, log: logger }),
-    cleanup: createCleanupHandler({ db, dataDir, log: logger, env: config }),
   };
   const worker = startWorker({ db, queue, handlers, log: logger });
 
-  // Create the REST client for the Document Service.
-  const docServiceClient = createDocumentServiceClient({
-    baseUrl: config.DOCUMENT_SERVICE_URL,
-    apiKey: config.API_KEY,
+  // MAX, VK, local chat and the web API share this document service in-process.
+  // There is no separate backend process for a messenger: adapters only translate
+  // platform events and delegate document operations to this core service.
+  const docServiceClient = createLocalDocumentServiceClient({
+    documentService,
+    docTypes,
+    templates,
+    faultManager,
   });
 
   const flow = createFlow({ docServiceClient, docTypes, templates, faultManager, debugCommands: config.DEBUG_COMMANDS, log: logger });
   const adapters = new Map();
   const dispatcher = createDispatcher({ db, flow, adapters, log: logger });
-  const notifier = createNotifier({ dispatcher, flow, adapters, docServiceClient, log: logger });
+  const notifier = createNotifier({ dispatcher, flow, adapters, docServiceClient, log: logger, pollIntervalMs: config.DOCUMENT_POLL_INTERVAL_MS });
 
   // Wire notifier into flow for polling support (avoids circular dependency)
   flow.setNotifier(notifier);
@@ -94,6 +98,14 @@ export function createRuntime(config = env, { db: passedDb, log: logger = log } 
   const routers = [];
   const pollers = [];
   let maxClient = null;
+  let cleanupTimer = null;
+
+  if (config.CLEANUP_ENABLED) {
+    cleanup();
+    const intervalMs = config.CLEANUP_INTERVAL_MS || 60 * 60 * 1000;
+    cleanupTimer = setInterval(cleanup, intervalMs);
+    cleanupTimer.unref?.();
+  }
 
   if (config.MAX_ENABLED) {
     // API MAX работает на сертификате УЦ Минцифры — его нет в наборе Node.js.
@@ -143,7 +155,7 @@ export function createRuntime(config = env, { db: passedDb, log: logger = log } 
     routers.push(createLocalChatRouter({ adapter, dispatcher, db, previewDir: path.join(previewRoot, 'previews'), samplesDir: path.join(ROOT, 'demo/cases') }));
   }
 
-  const app = createApp({ log: logger, deps: { documentService, docTypes, templates, fileStorage, db, log: logger, routers } });
+  const app = createApp({ log: logger, deps: { documentService, docTypes, templates, fileStorage, db, log: logger, apiKey: config.API_KEY, routers } });
 
   for (const poller of pollers) void poller.start();
   // Events accepted before a restart are processed once the adapters are registered.
@@ -153,6 +165,7 @@ export function createRuntime(config = env, { db: passedDb, log: logger = log } 
     app, db, documentService, docTypes, templates, queue, worker, flow, dispatcher, adapters, provider, faultManager, files, pollers,
     async close() {
       notifier.stop();
+      if (cleanupTimer) clearInterval(cleanupTimer);
       for (const poller of pollers) poller.stop();
       await worker.stop();
       db.close();
