@@ -355,6 +355,122 @@ describe('processDraft', () => {
     expect(result.warnings).toHaveLength(0);
   });
 
+  // ── Schema validation retry tests ──────────────────────────────────────────
+
+  it('schema validation fails → retry with feedback → success', async () => {
+    const provider = makeProvider();
+    // First call: valid JSON but field is a plain string (schema error)
+    provider.complete
+      .mockResolvedValueOnce(JSON.stringify({
+        title: null,
+        body: ['Текст'],
+        fields: {
+          recipient: 'Петровой А.С.',  // WRONG — should be { value: "...", quote: "..." }
+        },
+        changes: [],
+      }))
+      // Second call: corrected JSON
+      .mockResolvedValueOnce(JSON.stringify({
+        title: null,
+        body: ['Текст'],
+        fields: {
+          recipient: { value: 'Петровой А.С.', quote: 'для Петровой А.С.' },
+        },
+        changes: [],
+      }));
+
+    const result = await processDraft({
+      draft: DRAFT,
+      docType: DOC_TYPE,
+      userFields: {},
+      provider,
+      log: null,
+    });
+
+    expect(result.body).toEqual(['Текст']);
+    expect(result.aiFields.recipient).toEqual({ value: 'Петровой А.С.', quote: 'для Петровой А.С.' });
+    expect(provider.complete).toHaveBeenCalledTimes(2);
+
+    // Retry messages should contain Zod error details and previous response
+    const retryMessages = provider.complete.mock.calls[1][0];
+    expect(retryMessages).toHaveLength(2);
+    expect(retryMessages[0].role).toBe('system');
+    expect(retryMessages[0].content).toContain('AiResultSchema');
+    expect(retryMessages[1].role).toBe('user');
+    expect(retryMessages[1].content).toContain('не прошёл валидацию схемы');
+    expect(retryMessages[1].content).toContain('recipient');
+    expect(retryMessages[1].content).toContain(DRAFT);
+  });
+
+  it('schema validation fails twice → AiInvalidResponseError', async () => {
+    const provider = makeProvider();
+    // Both calls return schema-invalid responses
+    const invalidResponse = JSON.stringify({
+      title: null,
+      body: ['Текст'],
+      fields: {
+        recipient: 'Петровой А.С.',  // WRONG format
+      },
+      changes: [],
+    });
+    provider.complete
+      .mockResolvedValueOnce(invalidResponse)
+      .mockResolvedValueOnce(invalidResponse);
+
+    await expect(processDraft({
+      draft: DRAFT,
+      docType: DOC_TYPE,
+      userFields: {},
+      provider,
+      log: null,
+    })).rejects.toThrow(AiInvalidResponseError);
+
+    expect(provider.complete).toHaveBeenCalledTimes(2);
+  });
+
+  it('schema retry preserves original context', async () => {
+    const provider = makeProvider();
+    provider.complete
+      .mockResolvedValueOnce(JSON.stringify({
+        title: null,
+        body: ['Текст'],
+        fields: {
+          recipient: 'Петровой А.С.',
+        },
+        changes: [],
+      }))
+      .mockResolvedValueOnce(JSON.stringify({
+        title: null,
+        body: ['Текст'],
+        fields: {
+          recipient: { value: 'Петровой А.С.', quote: 'для Петровой А.С.' },
+        },
+        changes: [],
+      }));
+
+    await processDraft({
+      draft: DRAFT,
+      docType: DOC_TYPE,
+      userFields: {},
+      provider,
+      log: null,
+    });
+
+    const retryMessages = provider.complete.mock.calls[1][0];
+    const retryUserMessage = retryMessages[1].content;
+
+    // Retry user message contains the original draft text
+    expect(retryUserMessage).toContain(DRAFT);
+
+    // Retry user message contains the Zod error path (recipient field)
+    expect(retryUserMessage).toContain('recipient');
+
+    // Retry system message includes original system prompt + schema instructions
+    const retrySystemMessage = retryMessages[0].content;
+    expect(retrySystemMessage).toContain('AiResultSchema');
+    expect(retrySystemMessage).toContain('ВАЖНО');
+  });
+
   it('derived field in result.fields NOT grounded → null and groundedFields entry', async () => {
     const provider = makeProvider();
     const draftWithSender = 'Записка для Петровой А.С. от Иванова И.И. о командировке в Москву 01.01.2025';

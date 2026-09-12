@@ -71,13 +71,32 @@ export async function processDraft({ draft, docType, userFields, provider, log, 
     }
   }
 
-  // Step 3: Validate with Zod schema
+  // Step 3: Validate with Zod schema (with one retry — feed errors back to AI)
   let result;
   try {
     result = AiResultSchema.parse(parsed);
   } catch (err) {
-    log?.warn({ zodErrors: err.errors }, 'ai_schema_validation_failed');
-    throw new AiInvalidResponseError(`AI response failed schema: ${err.message}`);
+    log?.warn({ zodErrors: err.issues }, 'ai_schema_validation_failed, retrying');
+    const formattedErrors = err.issues
+      .map(e => `  - поле «${e.path.join('.')}»: ${e.message}`)
+      .join('\n');
+    const retryMessages = [
+      { role: 'system', content: messages[0].content + '\n\nВАЖНО: Отвечай ТОЛЬКО валидным JSON-объектом, соответствующим схеме AiResultSchema. Каждое поле в "fields" должно быть объектом { "value": "...", "quote": "..." } или null.' },
+      {
+        role: 'user',
+        content: `Черновик:\n<draft>\n${draft}\n</draft>\n\nТвой предыдущий ответ не прошёл валидацию схемы. Ошибки:\n${formattedErrors}\n\nТвой ответ:\n${raw}\n\nИсправь ошибки и верни корректный JSON-объект по той же схеме. Каждое поле в "fields" должно быть объектом { "value": "...", "quote": "..." } или null.`,
+      },
+    ];
+    try {
+      raw = await provider.complete(retryMessages);
+      parsed = extractJson(raw);
+      result = AiResultSchema.parse(parsed);
+    } catch (err2) {
+      const retryDetail = err2 instanceof Error && err2.name === 'ZodError'
+        ? `Retry also failed schema: ${JSON.stringify(err2.issues)}`
+        : `AI returned invalid response twice: ${err2.message}`;
+      throw new AiInvalidResponseError(`AI response failed schema twice. First: ${err.message}. ${retryDetail}`);
+    }
   }
 
   // Step 4: Grounding check on extract AND derived fields
