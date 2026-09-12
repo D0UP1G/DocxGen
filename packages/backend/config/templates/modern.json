@@ -3,11 +3,11 @@
   "name": "Современный",
   "description": "Arial 12 пт, интервал 1.15, выравнивание по левому краю, адресат слева, организация в колонтитуле, «Страница N из M» внизу",
   "preview": "previews/modern.png",
-  "organization": { "name": "ООО «Пример»", "address": "г. Москва, ул. Примерная, д. 1", "phone": "+7 (000) 000-00-00" },
-  "page": { "marginsMm": { "top": 25, "right": 15, "bottom": 25, "left": 25 } },
+  "organization": { "name": "", "address": "г. Москва, ул. Примерная, д. 1", "phone": "+7 (000) 000-00-00" },
+  "page": { "marginsMm": { "top": 15, "right": 15, "bottom": 15, "left": 25 } },
   "font": { "family": "Arial", "sizePt": 12 },
   "paragraph": { "lineSpacing": 1.15, "firstLineIndentMm": 0, "align": "left", "spaceAfterPt": 6 },
-  "header": { "pageNumber": "none", "firstPage": false, "text": "ООО «Пример»" },
+  "header": { "pageNumber": "none", "firstPage": false, "text": "" },
   "footer": { "text": null, "pageNumber": "nOfM" },
   "blocks": {
     "orgHeader":  { "show": false, "align": "center", "bold": true },
@@ -19,6 +19,6 @@
   },
   "placeholder": { "format": "[{label}]", "highlight": "yellow" },
   "autoFill": { "date": true },
-  "dateFormat": "DD.MM.YYYY",
-  "requiredFields": ["Адресат", "Дата", "Номер", "Автор", "Должность", "Подпись"]
+  "dateFormat": "D MMMM YYYY г.",
+  "requiredFields": ["Организация", "Адресат", "Дата", "Номер", "ФИО автора", "Должность автора"]
 }

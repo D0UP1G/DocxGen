@@ -3,8 +3,8 @@
   "name": "Классический",
   "description": "Times New Roman 14 пт, полуторный интервал, адресат справа вверху, номер страницы сверху по центру со второй страницы",
   "preview": "previews/classic.png",
-  "organization": { "name": "ООО «Пример»", "address": "г. Москва, ул. Примерная, д. 1", "phone": "+7 (000) 000-00-00" },
-  "page": { "marginsMm": { "top": 20, "right": 10, "bottom": 20, "left": 30 } },
+  "organization": { "name": "", "address": "г. Москва, ул. Примерная, д. 1", "phone": "+7 (000) 000-00-00" },
+  "page": { "marginsMm": { "top": 20, "right": 15, "bottom": 20, "left": 30 } },
   "font": { "family": "Times New Roman", "sizePt": 14 },
   "paragraph": { "lineSpacing": 1.5, "firstLineIndentMm": 12.5, "align": "justify", "spaceAfterPt": 0 },
   "header": { "pageNumber": "center", "firstPage": false, "text": null },
@@ -19,6 +19,6 @@
   },
   "placeholder": { "format": "[{label}]", "highlight": "yellow" },
   "autoFill": { "date": true },
-  "dateFormat": "DD.MM.YYYY",
-  "requiredFields": ["Адресат", "Дата", "Номер", "Автор", "Должность", "Подпись"]
+  "dateFormat": "D MMMM YYYY г.",
+  "requiredFields": ["Организация", "Адресат", "Дата", "Номер", "ФИО автора", "Должность автора"]
 }
