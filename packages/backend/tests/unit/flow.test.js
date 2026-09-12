@@ -14,12 +14,12 @@ import { encode } from '../../src/bot/payload.js';
 
 const mockDocTypes = [
   { id: 'memo', name: 'Служебная записка', hint: 'Для внутренних обращений', fields: [
-    { key: 'addressee', label: 'Адресат', kind: 'extract', required: true, question: 'Кому адресовано?', example: 'Директору Иванову И.И.' },
-    { key: 'authorPosition', label: 'Должность автора', kind: 'extract', required: true, question: 'Какая ваша должность?', example: 'Начальник отдела' },
-    { key: 'authorName', label: 'ФИО автора', kind: 'extract', required: true, question: 'Ваши ФИО?', example: 'Петров П.П.' },
+    { key: 'Адресат', label: 'Адресат', kind: 'extract', required: true, question: 'Кому адресовано?', example: 'Директору Иванову И.И.' },
+    { key: 'Должность автора', label: 'Должность автора', kind: 'extract', required: true, question: 'Какая ваша должность?', example: 'Начальник отдела' },
+    { key: 'ФИО автора', label: 'ФИО автора', kind: 'extract', required: true, question: 'Ваши ФИО?', example: 'Петров П.П.' },
   ]},
   { id: 'report', name: 'Докладная записка', hint: 'Для докладов руководству', fields: [
-    { key: 'addressee', label: 'Адресат', kind: 'extract', required: true, question: 'Кому адресовано?', example: 'Директору' },
+    { key: 'Адресат', label: 'Адресат', kind: 'extract', required: true, question: 'Кому адресовано?', example: 'Директору' },
   ]},
 ];
 
@@ -336,7 +336,7 @@ describe('flow', () => {
 
     const conv = makeConversation({
       state: 'asking_field', documentId: 'doc-1', stateVersion: 4,
-      pendingField: 'addressee',
+      pendingField: 'Адресат',
     });
 
     // Create a fresh client that returns a doc with no pending fields
@@ -345,7 +345,7 @@ describe('flow', () => {
       createDocument: vi.fn(),
       getDocument: vi.fn(() => ({
         id: 'doc-1', status: 'processed', docType: 'report', templateId: 'classic',
-        sourceText: 'Текст', draftVersion: 1, userFields: { addressee: null },
+        sourceText: 'Текст', draftVersion: 1, userFields: { 'Адресат': null },
         version: { aiFields: {}, title: null, stale: false },
       })),
       setDraft: vi.fn(),

@@ -24,7 +24,7 @@ const ALIGN = {
  * function to ensure consistent formatting.
  *
  * @param {RenderModel} model
- * @param {string} key  field key (e.g. 'addressee', 'date', 'number')
+ * @param {string} key  field key (e.g. 'Адресат', 'Дата', 'Номер')
  * @returns {TextRun|TextRun[]}
  */
 export function valueRuns(model, key) {
@@ -68,7 +68,7 @@ function orgHeader(model) {
  * Addressee block.
  * position "right": borderless table, 2 columns (left empty, right = widthPercent%).
  * position "left": paragraphs without indent.
- * For letter: outputs addresseeOrg, addresseePerson, addresseeAddress separately.
+ * For letter: outputs Организация адресата, Лицо адресата, Адрес адресата separately.
  */
 function addressee(model) {
   const t = model.template;
@@ -81,7 +81,7 @@ function addressee(model) {
       new TableCell({ children: [new Paragraph({ children: [] })], borders: noBorders() }),
       new TableCell({
         width: { size: cfg.widthPercent, type: WidthType.PERCENTAGE },
-        children: isLetter ? letterAddresseeParas(model) : [new Paragraph({ children: valueRuns(model, 'addressee') })],
+        children: isLetter ? letterAddresseeParas(model) : [new Paragraph({ children: valueRuns(model, 'Адресат') })],
         borders: noBorders(),
       }),
     ];
@@ -90,15 +90,15 @@ function addressee(model) {
 
   // position === 'left': plain paragraphs, no indent
   if (isLetter) return letterAddresseeParas(model);
-  return [new Paragraph({ children: valueRuns(model, 'addressee') })];
+  return [new Paragraph({ children: valueRuns(model, 'Адресат') })];
 }
 
 /** Letter-specific addressee: three separate paragraphs. */
 function letterAddresseeParas(model) {
   return [
-    new Paragraph({ children: valueRuns(model, 'addresseeOrg') }),
-    new Paragraph({ children: valueRuns(model, 'addresseePerson') }),
-    new Paragraph({ children: valueRuns(model, 'addresseeAddress') }),
+    new Paragraph({ children: valueRuns(model, 'Организация адресата') }),
+    new Paragraph({ children: valueRuns(model, 'Лицо адресата') }),
+    new Paragraph({ children: valueRuns(model, 'Адрес адресата') }),
   ];
 }
 
@@ -124,11 +124,11 @@ function docTitle(model) {
  */
 function dateNumber(model) {
   const cfg = model.template.blocks.dateNumber;
-  const dateRuns = valueRuns(model, 'date');
+  const dateRuns = valueRuns(model, 'Дата');
   // For placeholder number, prepend "№ " so it reads "№ [Номер]"
-  const numberParaRuns = model.values.number?.value
-    ? [new TextRun(` № ${model.values.number.value}`)]
-    : [new TextRun(' № '), ...valueRuns(model, 'number')];
+  const numberParaRuns = model.values['Номер']?.value
+    ? [new TextRun(` № ${model.values['Номер'].value}`)]
+    : [new TextRun(' № '), ...valueRuns(model, 'Номер')];
 
   if (cfg.layout === 'row') {
     return [new Table({
@@ -167,7 +167,7 @@ function title(model) {
     : model.title;
   const runs = titleText
     ? [new TextRun({ text: titleText, bold: cfg.bold, italics: cfg.italic })]
-    : [new TextRun({ text: 'О ', bold: cfg.bold, italics: cfg.italic }), ...valueRuns(model, 'title')];
+    : [new TextRun({ text: 'О ', bold: cfg.bold, italics: cfg.italic }), ...valueRuns(model, 'Тема')];
   return [new Paragraph({
     alignment: ALIGN[cfg.align],
     children: runs,
@@ -178,10 +178,10 @@ function title(model) {
  * Salutation paragraph — centered, letter only.
  */
 function salutation(model) {
-  if (!model.values.salutation?.value) return [];
+  if (!model.values['Обращение']?.value) return [];
   return [new Paragraph({
     alignment: AlignmentType.CENTER,
-    children: [new TextRun(model.values.salutation.value)],
+    children: [new TextRun(model.values['Обращение'].value)],
   })];
 }
 
@@ -204,21 +204,15 @@ function body(model) {
  * "row" layout: position left, name right (borderless table).
  * "stack" layout: position over name (modern).
  *
- * Memo/report: authorPosition + authorName.
- * Letter: signerPosition + signerName.
+ * Memo/report: Должность автора + ФИО автора.
+ * Letter: Должность подписывающего + ФИО подписывающего.
  *
- * NOTE: Letter uses different field keys (signerPosition/signerName) than other docTypes.
- * This is a maintenance risk — if you want to unify, you must also:
- *   1. Update letter.json config to use authorPosition/authorName
- *   2. Migrate existing documents that have signerPosition/signerName data in versions.ai_fields
- *   3. Update frontend DocumentGenerator.tsx letter field list
- *   4. Update constants.ts FIELD_LABELS and FIELD_ORDER
- * Until then, this special case stays to avoid breaking existing data.
+ * NOTE: Letter uses different field keys than other docTypes.
  */
 function signature(model) {
   const isLetter = model.docType.id === 'letter';
-  const posKey = isLetter ? 'signerPosition' : 'authorPosition';
-  const nameKey = isLetter ? 'signerName' : 'authorName';
+  const posKey = isLetter ? 'Должность подписывающего' : 'Должность автора';
+  const nameKey = isLetter ? 'ФИО подписывающего' : 'ФИО автора';
   const cfg = model.template.blocks.signature;
 
   if (cfg.layout === 'row') {
@@ -251,11 +245,11 @@ function signature(model) {
  * Executor — small font at bottom, letter only.
  */
 function executor(model) {
-  if (!model.values.executor?.value) return [];
+  if (!model.values['Исполнитель']?.value) return [];
   const t = model.template;
   return [new Paragraph({
     children: [new TextRun({
-      text: model.values.executor.value,
+      text: model.values['Исполнитель'].value,
       size: halfPt(t.font.sizePt - 2),
     })],
   })];
@@ -269,11 +263,134 @@ function noBorders() {
   return { top: b, bottom: b, left: b, right: b };
 }
 
+// ── Layout builders ─────────────────────────────────────────────────────────
+
+/**
+ * Layout builders — one per template+docType combination.
+ * Each builder calls the block functions in the correct order for its combo.
+ * Block functions read their own config from model.template.blocks.*,
+ * so layout builders only need to specify the sequence.
+ */
+
+/** classic + memo: orgHeader → addressee → docTitle → dateNumber → title → body → signature */
+function classicMemoLayout(model) {
+  return [
+    ...orgHeader(model),
+    ...addressee(model),
+    ...docTitle(model),
+    ...dateNumber(model),
+    ...title(model),
+    ...body(model),
+    ...signature(model),
+  ];
+}
+
+/** classic + report: same as classic + memo */
+const classicReportLayout = classicMemoLayout;
+
+/** classic + reference: orgHeader → docTitle → dateNumber → title → body → signature */
+function classicReferenceLayout(model) {
+  return [
+    ...orgHeader(model),
+    ...docTitle(model),
+    ...dateNumber(model),
+    ...title(model),
+    ...body(model),
+    ...signature(model),
+  ];
+}
+
+/** classic + letter: orgHeader → dateNumber → addressee → title → salutation → body → signature → executor */
+function classicLetterLayout(model) {
+  return [
+    ...orgHeader(model),
+    ...dateNumber(model),
+    ...addressee(model),
+    ...title(model),
+    ...salutation(model),
+    ...body(model),
+    ...signature(model),
+    ...executor(model),
+  ];
+}
+
+/** modern + memo: addressee → docTitle → dateNumber → title → body → signature */
+function modernMemoLayout(model) {
+  return [
+    ...addressee(model),
+    ...docTitle(model),
+    ...dateNumber(model),
+    ...title(model),
+    ...body(model),
+    ...signature(model),
+  ];
+}
+
+/** modern + report: same as modern + memo */
+const modernReportLayout = modernMemoLayout;
+
+/** modern + reference: docTitle → dateNumber → title → body → signature */
+function modernReferenceLayout(model) {
+  return [
+    ...docTitle(model),
+    ...dateNumber(model),
+    ...title(model),
+    ...body(model),
+    ...signature(model),
+  ];
+}
+
+/** modern + letter: dateNumber → addressee → title → salutation → body → signature → executor */
+function modernLetterLayout(model) {
+  return [
+    ...dateNumber(model),
+    ...addressee(model),
+    ...title(model),
+    ...salutation(model),
+    ...body(model),
+    ...signature(model),
+    ...executor(model),
+  ];
+}
+
+/**
+ * Registry of layout builders, keyed by "templateId:docTypeId".
+ * @type {Record<string, (model: RenderModel) => (Paragraph|Table)[]>}
+ */
+const LAYOUTS = {
+  'classic:memo': classicMemoLayout,
+  'classic:report': classicReportLayout,
+  'classic:reference': classicReferenceLayout,
+  'classic:letter': classicLetterLayout,
+  'modern:memo': modernMemoLayout,
+  'modern:report': modernReportLayout,
+  'modern:reference': modernReferenceLayout,
+  'modern:letter': modernLetterLayout,
+};
+
 // ── Export ──────────────────────────────────────────────────────────────────
+
+/**
+ * Main entry point — generates the full document layout for a given
+ * template+docType combination with [Label] placeholders.
+ *
+ * @param {RenderModel} model
+ * @returns {(Paragraph|Table)[]}
+ */
+export function construct(model) {
+  const key = `${model.template.id}:${model.docType.id}`;
+  const layout = LAYOUTS[key];
+  if (!layout) {
+    throw new Error(`No layout defined for template=${model.template.id} docType=${model.docType.id}`);
+  }
+  return layout(model);
+}
 
 /**
  * Registry of block functions, keyed by layout name.
  * Each function receives the full RenderModel and returns (Paragraph|Table)[].
+ *
+ * Kept for backward compatibility with render.js (docType.layout iteration).
  *
  * @type {Record<string, (model: RenderModel) => (Paragraph|Table)[]>}
  */

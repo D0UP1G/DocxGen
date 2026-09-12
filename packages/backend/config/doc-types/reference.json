@@ -6,15 +6,15 @@
   "layout": ["orgHeader", "docTitle", "dateNumber", "title", "body", "signature"],
   "structureHint": "Констатирующее изложение фактов за период, без просьб.",
   "fields": [
-    { "key": "title", "label": "Заголовок", "kind": "derived", "required": true },
-    { "key": "date", "label": "Дата", "kind": "auto", "required": true },
-    { "key": "authorPosition", "label": "Должность автора", "kind": "extract", "required": true,
+    { "key": "Тема", "label": "Тема", "kind": "derived", "required": true },
+    { "key": "Дата", "label": "Дата", "kind": "auto", "required": true },
+    { "key": "Должность автора", "label": "Должность автора", "kind": "extract", "required": true,
       "question": "Ваша должность и подразделение?", "example": "Старший инженер отдела ИТ" },
-    { "key": "authorName", "label": "ФИО автора", "kind": "extract", "required": true,
+    { "key": "ФИО автора", "label": "ФИО автора", "kind": "extract", "required": true,
       "question": "Ваши фамилия и инициалы?", "example": "Сидоров П. П." },
-    { "key": "addressee", "label": "Адресат", "kind": "extract", "required": false,
+    { "key": "Адресат", "label": "Адресат", "kind": "extract", "required": false,
       "question": "Кому адресована справка?", "example": "В отдел кадров" },
-    { "key": "period", "label": "Период", "kind": "extract", "required": false,
+    { "key": "Период", "label": "Период", "kind": "extract", "required": false,
       "question": "За какой период?", "example": "за сентябрь 2026 г." }
   ]
 }

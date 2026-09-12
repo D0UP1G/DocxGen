@@ -7,23 +7,23 @@ const memoDocType = {
   id: 'memo',
   name: 'Служебная записка',
   fields: [
-    { key: 'addressee', label: 'Адресат', kind: 'extract', required: true,
+    { key: 'Адресат', label: 'Адресат', kind: 'extract', required: true,
       question: 'Кому адресована записка? Укажите должность и ФИО.',
       example: 'Начальнику отдела кадров Петровой А. С.' },
-    { key: 'authorPosition', label: 'Должность автора', kind: 'extract', required: true,
+    { key: 'Должность автора', label: 'Должность автора', kind: 'extract', required: true,
       question: 'Ваша должность и подразделение?', example: 'Ведущий специалист отдела закупок' },
-    { key: 'authorName', label: 'ФИО автора', kind: 'extract', required: true,
+    { key: 'ФИО автора', label: 'ФИО автора', kind: 'extract', required: true,
       question: 'Ваши фамилия и инициалы?', example: 'Сидоров П. П.' },
-    { key: 'title', label: 'Заголовок', kind: 'derived', required: true },
-    { key: 'date', label: 'Дата', kind: 'auto', required: true },
-    { key: 'number', label: 'Номер', kind: 'registry', required: false },
+    { key: 'Тема', label: 'Тема', kind: 'derived', required: true },
+    { key: 'Дата', label: 'Дата', kind: 'auto', required: true },
+    { key: 'Номер', label: 'Номер', kind: 'registry', required: false },
   ],
 };
 
 const classicTemplate = {
   id: 'classic',
   organization: { name: 'ООО «Пример»', address: 'г. Москва, ул. Примерная, д. 1', phone: '+7 (000) 000-00-00' },
-  autoFill: { date: true },
+  autoFill: { 'Дата': true },
   dateFormat: 'DD.MM.YYYY',
 };
 
@@ -44,26 +44,26 @@ describe('mergeRequisites', () => {
       const result = mergeRequisites({
         docType: memoDocType,
         template: classicTemplate,
-        aiFields: { addressee: { value: 'ИИ значение', quote: 'цитата' } },
+        aiFields: { 'Адресат': { value: 'ИИ значение', quote: 'цитата' } },
         title: null,
-        userFields: { addressee: 'Значение пользователя' },
+        userFields: { 'Адресат': 'Значение пользователя' },
         today: '2026-09-11',
       });
-      expect(result.values.addressee.value).toBe('Значение пользователя');
-      expect(result.values.addressee.source).toBe('user');
+      expect(result.values['Адресат'].value).toBe('Значение пользователя');
+      expect(result.values['Адресат'].source).toBe('user');
     });
 
     it('AI value used when user has no value', () => {
       const result = mergeRequisites({
         docType: memoDocType,
         template: classicTemplate,
-        aiFields: { addressee: { value: 'Петровой А. С.', quote: 'для Петровой' } },
+        aiFields: { 'Адресат': { value: 'Петровой А. С.', quote: 'для Петровой' } },
         title: null,
         userFields: {},
         today: '2026-09-11',
       });
-      expect(result.values.addressee.value).toBe('Петровой А. С.');
-      expect(result.values.addressee.source).toBe('ai');
+      expect(result.values['Адресат'].value).toBe('Петровой А. С.');
+      expect(result.values['Адресат'].source).toBe('ai');
     });
   });
 
@@ -76,12 +76,12 @@ describe('mergeRequisites', () => {
         template: classicTemplate,
         aiFields: {},
         title: null,
-        userFields: { addressee: null },
+        userFields: { 'Адресат': null },
         today: '2026-09-11',
       });
-      expect(result.values.addressee.value).toBeNull();
-      expect(result.values.addressee.source).toBe('user_skip');
-      expect(result.pending.find((p) => p.key === 'addressee')).toBeUndefined();
+      expect(result.values['Адресат'].value).toBeNull();
+      expect(result.values['Адресат'].source).toBe('user_skip');
+      expect(result.pending.find((p) => p.key === 'Адресат')).toBeUndefined();
     });
   });
 
@@ -97,8 +97,8 @@ describe('mergeRequisites', () => {
         userFields: {},
         today: '2026-09-11',
       });
-      expect(result.values.date.value).toBe('11.09.2026');
-      expect(result.values.date.source).toBe('auto');
+      expect(result.values['Дата'].value).toBe('11.09.2026');
+      expect(result.values['Дата'].source).toBe('auto');
     });
 
     it('autoFill.date = false → date goes to pending', () => {
@@ -111,8 +111,8 @@ describe('mergeRequisites', () => {
         userFields: {},
         today: '2026-09-11',
       });
-      expect(result.values.date.value).toBeNull();
-      expect(result.pending.find((p) => p.key === 'date')).toBeDefined();
+      expect(result.values['Дата'].value).toBeNull();
+      expect(result.pending.find((p) => p.key === 'Дата')).toBeDefined();
     });
   });
 
@@ -128,9 +128,9 @@ describe('mergeRequisites', () => {
         userFields: {},
         today: '2026-09-11',
       });
-      expect(result.values.number.value).toBeNull();
-      expect(result.values.number.source).toBe('none');
-      expect(result.pending.find((p) => p.key === 'number')).toBeUndefined();
+      expect(result.values['Номер'].value).toBeNull();
+      expect(result.values['Номер'].source).toBe('none');
+      expect(result.pending.find((p) => p.key === 'Номер')).toBeUndefined();
       expect(result.placeholders).toContain('Номер');
     });
   });
@@ -147,7 +147,7 @@ describe('mergeRequisites', () => {
         userFields: {},
         today: '2026-09-11',
       });
-      const addresseePending = result.pending.find((p) => p.key === 'addressee');
+      const addresseePending = result.pending.find((p) => p.key === 'Адресат');
       expect(addresseePending).toBeDefined();
       expect(addresseePending.question).toBe('Кому адресована записка? Укажите должность и ФИО.');
       expect(addresseePending.example).toBe('Начальнику отдела кадров Петровой А. С.');
@@ -187,9 +187,9 @@ describe('mergeRequisites', () => {
         userFields: {},
         today: '2026-09-11',
       });
-      // date is auto-filled, number is registry → pending should be: addressee, authorPosition, authorName, title
+      // date is auto-filled, number is registry → pending should be: Адресат, Должность автора, ФИО автора, Тема
       const keys = result.pending.map((p) => p.key);
-      expect(keys).toEqual(['addressee', 'authorPosition', 'authorName', 'title']);
+      expect(keys).toEqual(['Адресат', 'Должность автора', 'ФИО автора', 'Тема']);
     });
   });
 
@@ -224,8 +224,8 @@ describe('mergeRequisites', () => {
         userFields: {},
         today: '2026-09-11',
       });
-      expect(result.values.title.value).toBe('О закупке оборудования');
-      expect(result.values.title.source).toBe('ai');
+      expect(result.values['Тема'].value).toBe('О закупке оборудования');
+      expect(result.values['Тема'].source).toBe('ai');
     });
 
     it('from userFields.title when provided', () => {
@@ -234,11 +234,11 @@ describe('mergeRequisites', () => {
         template: classicTemplate,
         aiFields: {},
         title: 'О чем-то другом',
-        userFields: { title: 'Мой заголовок' },
+        userFields: { 'Тема': 'Мой заголовок' },
         today: '2026-09-11',
       });
-      expect(result.values.title.value).toBe('Мой заголовок');
-      expect(result.values.title.source).toBe('user');
+      expect(result.values['Тема'].value).toBe('Мой заголовок');
+      expect(result.values['Тема'].source).toBe('user');
     });
 
     it('null when neither AI nor user provide title', () => {
@@ -250,7 +250,7 @@ describe('mergeRequisites', () => {
         userFields: {},
         today: '2026-09-11',
       });
-      expect(result.values.title.value).toBeNull();
+      expect(result.values['Тема'].value).toBeNull();
     });
   });
 
@@ -287,9 +287,9 @@ describe('mergeRequisites', () => {
         docType: memoDocType,
         template: classicTemplate,
         aiFields: {
-          addressee: { value: 'Петровой А. С.', quote: 'для Петровой' },
-          authorPosition: { value: 'Инженер', quote: 'инженер' },
-          authorName: { value: 'Сидоров П. П.', quote: 'Сидоров' },
+          'Адресат': { value: 'Петровой А. С.', quote: 'для Петровой' },
+          'Должность автора': { value: 'Инженер', quote: 'инженер' },
+          'ФИО автора': { value: 'Сидоров П. П.', quote: 'Сидоров' },
         },
         title: 'О закупке',
         userFields: {},
@@ -316,7 +316,7 @@ describe('mergeRequisites', () => {
       expect(result.values).toBeDefined();
       expect(result.pending).toBeInstanceOf(Array);
       expect(result.placeholders).toBeInstanceOf(Array);
-      // date auto-filled, number registry → 4 pending (addressee, authorPosition, authorName, title)
+      // date auto-filled, number registry → 4 pending (Адресат, Должность автора, ФИО автора, Тема)
       expect(result.pending).toHaveLength(4);
       expect(result.placeholders).toContain('Номер');
     });

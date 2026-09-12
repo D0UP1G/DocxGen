@@ -28,6 +28,7 @@ export function DocumentGenerator() {
   const error = useAppSelector((s) => s.document.error);
   const processing = useAppSelector((s) => s.document.processing);
   const generating = useAppSelector((s) => s.document.generating);
+  const docTypeFields = useAppSelector((s) => s.document.docTypeFields);
 
   const typeDescription = useMemo(
     () => DOCUMENT_TYPES.find((item) => item.id === documentType)?.description ?? '',
@@ -39,11 +40,7 @@ export function DocumentGenerator() {
     [templateId],
   );
 
-  const visibleFields = useMemo(() => {
-    if (documentType === 'reference') return ['authorPosition', 'authorName', 'addressee', 'period'];
-    if (documentType === 'letter') return ['addresseeOrg', 'addresseePerson', 'addresseeAddress', 'signerPosition', 'signerName', 'executor'];
-    return ['addressee', 'authorPosition', 'authorName', 'number'];
-  }, [documentType]);
+
 
   const currentStep = correctedText ? 2 : 1;
 
@@ -135,7 +132,7 @@ export function DocumentGenerator() {
               <CorrectedSection
                 correctedText={correctedText}
                 requisites={requisites}
-                visibleFields={visibleFields}
+                docTypeFields={docTypeFields}
                 onTextChange={handleCorrectedTextChange}
                 onRequisiteChange={handleRequisiteChange}
                 disabled={processing || generating}

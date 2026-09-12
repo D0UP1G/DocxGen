@@ -3,12 +3,12 @@ import { motion, useReducedMotion } from 'framer-motion';
 import { Card } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { RequisitesForm } from './RequisitesForm';
-import type { Requisites } from '@/types/document';
+import type { Requisites, DocTypeField } from '@/types/document';
 
 interface CorrectedSectionProps {
   correctedText: string;
   requisites: Requisites;
-  visibleFields: string[];
+  docTypeFields: DocTypeField[];
   onTextChange: (value: string) => void;
   onRequisiteChange: (field: string, value: string) => void;
   disabled: boolean;
@@ -17,7 +17,7 @@ interface CorrectedSectionProps {
 export const CorrectedSection = memo(function CorrectedSection({
   correctedText,
   requisites,
-  visibleFields,
+  docTypeFields,
   onTextChange,
   onRequisiteChange,
   disabled,
@@ -54,9 +54,8 @@ export const CorrectedSection = memo(function CorrectedSection({
         <span className="label-caps">Реквизиты</span>
         <div className="mt-1.5">
           <RequisitesForm
-            fields={visibleFields}
+            docTypeFields={docTypeFields}
             requisites={requisites}
-            visibleFields={visibleFields}
             onChange={onRequisiteChange}
             disabled={disabled}
           />

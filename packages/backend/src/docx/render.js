@@ -1,6 +1,6 @@
 import { Document, Packer, Header, Footer, Paragraph, TextRun, AlignmentType, PageNumber } from 'docx';
 import { mm, pt, halfPt, line } from './units.js';
-import { BLOCKS } from './blocks.js';
+import { construct } from './blocks.js';
 
 const ALIGN = {
   left: AlignmentType.LEFT,
@@ -24,8 +24,8 @@ export async function renderDocx(model) {
     eastAsia: t.font.family,
   };
 
-  // Build document body from the layout block list
-  const children = model.docType.layout.flatMap((block) => BLOCKS[block](model));
+  // Build document body via the construct helper (handles all template+docType combos)
+  const children = construct(model);
 
   const doc = new Document({
     creator: 'Документ за 3 шага',

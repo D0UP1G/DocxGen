@@ -14,6 +14,27 @@ export interface MissingField {
   label: string;
 }
 
+export interface DocTypeField {
+  key: string;
+  label: string;
+  kind: 'extract' | 'derived' | 'auto' | 'template' | 'registry';
+  required: boolean;
+  question?: string;
+  example?: string;
+}
+
+export interface DocType {
+  id: string;
+  name: string;
+  hint?: string;
+  fields: DocTypeField[];
+}
+
+export interface CatalogResponse {
+  docTypes: DocType[];
+  templates?: Array<{ id: string; name: string }>;
+}
+
 export interface ProcessResponse {
   correctedText: string;
   requisites: Requisites;
@@ -65,4 +86,6 @@ export interface DocumentState {
   processing: boolean;
   generating: boolean;
   documentId?: string;
+  docTypeFields: DocTypeField[];
+  catalog?: CatalogResponse;
 }
