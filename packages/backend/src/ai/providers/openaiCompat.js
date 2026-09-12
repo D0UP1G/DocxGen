@@ -44,7 +44,9 @@ export function createOpenAiCompatProvider({ baseUrl, apiKey, model, temperature
       }
 
       const data = await res.json();
-      return data.choices?.[0]?.message?.content ?? '';
+      const content = data.choices?.[0]?.message?.content ?? '';
+      if (!content.trim()) throw new AiUnavailableError('AI returned empty response');
+      return content;
     },
   };
 }

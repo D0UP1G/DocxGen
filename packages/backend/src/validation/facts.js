@@ -1,4 +1,17 @@
 /**
+ * Normalize Russian number abbreviations to plain numbers for comparison.
+ * "2.5 млн" → "2500000", "15 тыс" → "15000", "3.2 млрд" → "3200000000"
+ * @param {string} text
+ * @returns {string}
+ */
+function normalizeNumber(text) {
+  return text
+    .replace(/(\d+(?:[.,]\d+)?)\s*тыс/gi, (_, n) => String(parseFloat(n.replace(',', '.')) * 1000))
+    .replace(/(\d+(?:[.,]\d+)?)\s*млн/gi, (_, n) => String(parseFloat(n.replace(',', '.')) * 1000000))
+    .replace(/(\d+(?:[.,]\d+)?)\s*млрд/gi, (_, n) => String(parseFloat(n.replace(',', '.')) * 1000000000));
+}
+
+/**
  * Extract structured facts from text for comparison.
  * @param {string} text
  * @returns {{ numbers: string[], dates: string[], money: string[], names: string[], conditions: string[] }}
@@ -28,9 +41,12 @@ export function extractFacts(text) {
   }
 
   const money = [];
-  for (const m of text.matchAll(/(\d[\d\s]*(?:[.,]\d+)?)\s*(?:руб|р\.|₽|тыс|млн)/gi)) {
+  for (const m of text.matchAll(/(\d[\d\s]*(?:[.,]\d+)?)\s*(?:руб|р\.|₽|тыс|млн|млрд)/gi)) {
     let num = m[1].replace(/\s/g, '').replace(',', '.');
-    const multiplier = m[0].includes('тыс') ? 1000 : m[0].includes('млн') ? 1000000 : 1;
+    let multiplier = 1;
+    if (m[0].includes('млрд')) multiplier = 1000000000;
+    else if (m[0].includes('млн')) multiplier = 1000000;
+    else if (m[0].includes('тыс')) multiplier = 1000;
     money.push(String(parseFloat(num) * multiplier));
   }
 
@@ -61,15 +77,19 @@ export function compare(sourceText, outputText) {
   const src = extractFacts(sourceText);
   const out = extractFacts(outputText);
 
+  // Normalize numbers for semantic equivalence (e.g. "2.5 млн" → "2500000")
+  const normalizedSrcNums = src.numbers.map(normalizeNumber);
+  const normalizedOutNums = out.numbers.map(normalizeNumber);
+
   const added = [];
   const lost = [];
 
-  // Check numbers
-  for (const n of out.numbers) {
-    if (!src.numbers.includes(n)) added.push(`number:${n}`);
+  // Check numbers (using normalized forms)
+  for (const n of normalizedOutNums) {
+    if (!normalizedSrcNums.includes(n)) added.push(`number:${n}`);
   }
-  for (const n of src.numbers) {
-    if (!out.numbers.includes(n)) lost.push(`number:${n}`);
+  for (const n of normalizedSrcNums) {
+    if (!normalizedOutNums.includes(n)) lost.push(`number:${n}`);
   }
 
   // Check dates

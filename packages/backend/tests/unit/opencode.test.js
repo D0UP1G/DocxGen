@@ -28,7 +28,7 @@ describe('OpenCode CLI provider', () => {
     await expect(provider.complete([{ role: 'system', content: 'Правила' }, { role: 'user', content: 'Черновик' }])).resolves.toBe('{"title":"О привете"}');
     expect(calls[0].args).toEqual(['run', '--format', 'json', '--agent', 'doc-editor']);
     expect(calls[0].options.cwd).toBe('/cfg');
-    expect(calls[0].prompt).toBe('Правила\n\nЧерновик');
+    expect(calls[0].prompt).toBe('[Системный промпт]\nПравила\n\nЧерновик');
   });
 
   it('maps failures to AiUnavailableError so the queue and the user see an AI error', async () => {
@@ -57,7 +57,7 @@ describe('OpenCode CLI provider', () => {
 
   it('builds container and model arguments', () => {
     expect(buildOpencodeCommand({ runtime: 'docker', image: 'img', model: 'opencode/big-pickle' })).toMatchObject({ file: 'docker', args: ['run', '--rm', '-i', 'img', 'opencode', 'run', '--format', 'json', '--agent', 'doc-editor', '--model', 'opencode/big-pickle'] });
-    expect(toPrompt([{ role: 'assistant', content: 'x' }])).toContain('предыдущий ответ');
+    expect(toPrompt([{ role: 'assistant', content: 'x' }])).toContain('Предыдущий ответ модели');
     expect(parseOpencodeOutput('not json\n').text).toBe('');
   });
 });

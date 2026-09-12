@@ -28,8 +28,8 @@ export function checkGrounding(value, quote, source) {
   const quoteWords = normQuote.split(/\s+/);
 
   for (const vw of valueWords) {
-    const vwPrefix = vw.slice(0, 4);
-    const matched = quoteWords.some(qw => qw.startsWith(vwPrefix));
+    // Exact word match OR 6-char prefix minimum (looser than old 4-char prefix)
+    const matched = quoteWords.some(qw => qw === vw || qw.startsWith(vw.slice(0, Math.max(6, vw.length - 1))));
     if (!matched) {
       return { ok: false, reason: `word_${vw}_not_found_in_quote` };
     }
@@ -42,6 +42,39 @@ export function checkGrounding(value, quote, source) {
     if (!normQuote.replace(/\s/g, '').includes(normNum)) {
       return { ok: false, reason: `number_${normNum}_not_in_quote` };
     }
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Relaxed grounding check for derived fields (title, salutation).
+ * Only checks that the value is not empty and contains at least one significant word
+ * that appears in the draft — looser than extract grounding.
+ * @param {string} value - The derived field value
+ * @param {string} source - The original draft text
+ * @returns {{ ok: boolean, reason?: string }}
+ */
+export function checkDerivedGrounding(value, source) {
+  const normSource = normalize(source);
+  const normValue = normalize(value);
+
+  if (!normValue) {
+    return { ok: false, reason: 'empty_value' };
+  }
+
+  // Get significant words (len >= 3, not stopwords, not pure digits)
+  const valueWords = normValue.split(/\s+/).filter(w => w.length >= 3 && !STOPWORDS.has(w) && !/^\d+$/.test(w));
+
+  // If no significant words, it's likely a placeholder or empty — reject
+  if (valueWords.length === 0) {
+    return { ok: false, reason: 'no_significant_words' };
+  }
+
+  // Relaxed check: at least ONE significant word from the value must appear in the source
+  const hasWordInSource = valueWords.some(vw => normSource.includes(vw));
+  if (!hasWordInSource) {
+    return { ok: false, reason: 'derived_words_not_in_source' };
   }
 
   return { ok: true };
