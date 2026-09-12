@@ -9,8 +9,8 @@ export function normalize(s) {
     .toLowerCase()
     .replace(/ё/g, 'е')
     .replace(/[""«»]/g, '"')
-    .replace(/–—/g, '-')
-    .replace(/[^\p{L}\p{N}\s.,№%]/gu, ' ')
+    .replace(/[–—]/g, '-')
+    .replace(/[^\p{L}\p{N}\s.,№%()+\-/]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }

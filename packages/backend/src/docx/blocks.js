@@ -29,6 +29,8 @@ const ALIGN = {
  */
 export function valueRuns(model, key) {
   const val = model.values[key]?.value;
+  // Empty string "" is intentionally treated as missing — it falls through to the placeholder.
+  // This matches the AI extraction behavior: empty fields come back as "" not null.
   if (val) {
     return [new TextRun(val)];
   }
@@ -200,6 +202,14 @@ function body(model) {
  *
  * Memo/report: authorPosition + authorName.
  * Letter: signerPosition + signerName.
+ *
+ * NOTE: Letter uses different field keys (signerPosition/signerName) than other docTypes.
+ * This is a maintenance risk — if you want to unify, you must also:
+ *   1. Update letter.json config to use authorPosition/authorName
+ *   2. Migrate existing documents that have signerPosition/signerName data in versions.ai_fields
+ *   3. Update frontend DocumentGenerator.tsx letter field list
+ *   4. Update constants.ts FIELD_LABELS and FIELD_ORDER
+ * Until then, this special case stays to avoid breaking existing data.
  */
 function signature(model) {
   const isLetter = model.docType.id === 'letter';

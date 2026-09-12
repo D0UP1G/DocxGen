@@ -26,11 +26,7 @@ export const FIELD_LABELS: Record<string, string> = {
   signerName: 'ФИО подписывающего',
   period: 'Период',
   date: 'Дата',
-  subject: 'Заголовок / тема',
   number: 'Номер',
-  position: 'Должность',
-  signature: 'Подпись',
-  greeting: 'Обращение',
   executor: 'Исполнитель',
 };
 
@@ -46,9 +42,6 @@ export const FIELD_ORDER: string[] = [
   'period',
   'date',
   'number',
-  'subject',
-  'signature',
-  'greeting',
   'executor',
 ];
 

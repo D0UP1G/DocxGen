@@ -14,7 +14,11 @@ import { AiUnavailableError } from '../../core/errors.js';
 
 /** Сообщения чата → один текстовый запрос: CLI принимает промпт целиком. Повтор после ошибки схемы идёт тем же текстом. */
 export function toPrompt(messages) {
-  return messages.map(({ role, content }) => (role === 'assistant' ? `Твой предыдущий ответ:\n${content}` : content)).join('\n\n');
+  return messages.map(({ role, content }) => {
+    if (role === 'system') return `[Системный промпт]\n${content}`;
+    if (role === 'assistant') return `[Предыдущий ответ модели]\n${content}`;
+    return content;
+  }).join('\n\n');
 }
 
 /** Собирает текст ответа модели из потока JSON-событий CLI; строки логов, не являющиеся JSON, пропускаются. */
