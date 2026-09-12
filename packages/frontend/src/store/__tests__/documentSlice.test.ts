@@ -29,6 +29,7 @@ const initialState: DocumentState = {
   error: '',
   processing: false,
   generating: false,
+  docTypeFields: [],
 };
 
 describe('documentSlice reducer', () => {

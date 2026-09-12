@@ -20,44 +20,56 @@ function getSystemPrompt() {
 
 /**
  * Build field-specific instructions per doc type.
- * Memo/report/reference use authorPosition/authorName; letter uses signerPosition/signerName.
- * @param {string} docTypeId
+ * Generates a dynamic list of fields with hints based on docType.fields.
+ * @param {{ id: string, name: string, fields: Array<{key: string, label: string, kind: string, question?: string}> }} docType
  * @returns {string}
  */
-function buildFieldKeyInstructions(docTypeId) {
-  if (docTypeId === 'letter') {
-    return `Для документа типа letter извлекай:
-- addresseeOrg (наименование организации-получателя)
-- addresseePerson (ФИО получателя)
-- addresseeAddress (адрес получателя)
-- salutation (формула обращения — derived)
-- signerPosition (должность подписывающего)
-- signerName (ФИО подписывающего)
-- executor (исполнитель)
-- title (заголовок — derived)
-- date (дата документа)`;
-  }
-  return `Для документа типа ${docTypeId} извлекай:
-- authorPosition (должность автора)
-- authorName (ФИО автора)
-- addressee (адресат документа)
-- title (заголовок — derived)
-- date (дата документа)`;
+function buildFieldKeyInstructions(docType) {
+  const kindHints = {
+    extract: 'найди в тексте',
+    derived: 'создай на основе текста',
+    auto: 'автоматически',
+    registry: 'реестровый номер — не извлекай',
+  };
+
+  const fieldLines = docType.fields.map(field => {
+    const hint = kindHints[field.kind] || '';
+    const questionPart = field.question ? ` — ${field.question}` : '';
+    return `- ${field.key} (${field.label}${hint ? ' — ' + hint : ''}${questionPart})`;
+  });
+
+  return `Для документа типа ${docType.name.replace(/\{/g, '\\{')} извлекай:\n${fieldLines.join('\n')}`;
 }
 
 /**
  * Build messages array for AI completion.
  *
- * @param {{ draft: string, docType: { id: string, name: string, structureHint: string, fields: Array<{key: string, label: string, kind: string, question?: string}> } }} params
+ * @param {{ draft: string, template: { requiredFields: string[] }, docType: { id: string, name: string, structureHint: string, fields: Array<{key: string, label: string, kind: string, question?: string}> } }} params
  * @returns {Array<{role: string, content: string}>}
  */
-export function buildMessages({ draft, docType }) {
+export function buildMessages({ draft, template, docType }) {
   const fieldsList = docType.fields
     .filter(f => f.kind === 'extract' || f.kind === 'derived')
     .map(f => `- ${f.key}: ${f.label}${f.kind === 'extract' ? ' (найди в тексте)' : ' (создай на основе текста)'}${f.question ? ' — ' + f.question : ''}`)
     .join('\n');
 
-  const fieldKeyInstructions = buildFieldKeyInstructions(docType.id);
+  const fieldKeyInstructions = buildFieldKeyInstructions(docType);
+
+  // Merge template.requiredFields (strings) with docType.fields (objects) → unique by label
+  const existingLabels = new Set();
+  if (template?.requiredFields) {
+    for (const field of template.requiredFields) {
+      existingLabels.add(field);
+    }
+  }
+  for (const field of docType.fields) {
+    existingLabels.add(field.label);
+  }
+  const existingPlaceholders = [...existingLabels].map(label => `[${label}]`).join(', ');
+
+  const existingPlaceholdersSection = existingLabels.size > 0
+    ? `Эти плейсхолдеры уже существуют в шаблоне: ${existingPlaceholders}.\nНЕ создавай дублирующие плейсхолдеры для этих полей.\nТы МОЖЕШЬ использовать их в тексте, если это необходимо.`
+    : 'В шаблоне пока нет плейсхолдеров.';
 
   // Sanitize template variable values to prevent injection via {{ }}
   const safeDocTypeName = docType.name.replace(/\{/g, '\\{');
@@ -68,7 +80,8 @@ export function buildMessages({ draft, docType }) {
     .replaceAll('{{docTypeId}}', docType.id)
     .replaceAll('{{structureHint}}', safeStructureHint)
     .replaceAll('{{fieldsList}}', fieldsList)
-    .replaceAll('{{fieldKeyInstructions}}', fieldKeyInstructions);
+    .replaceAll('{{fieldKeyInstructions}}', fieldKeyInstructions)
+    .replaceAll('{{existingPlaceholders}}', existingPlaceholdersSection);
 
   return [
     { role: 'system', content: systemPrompt },

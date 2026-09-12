@@ -15,35 +15,7 @@ export const DOCUMENT_TYPES: Array<{
   { id: 'letter', label: 'Письмо', description: 'Внешняя корреспонденция' },
 ];
 
-export const FIELD_LABELS: Record<string, string> = {
-  addressee: 'Адресат',
-  authorPosition: 'Должность автора',
-  authorName: 'ФИО автора',
-  addresseeOrg: 'Организация-получатель',
-  addresseePerson: 'ФИО получателя',
-  addresseeAddress: 'Адрес получателя',
-  signerPosition: 'Должность подписывающего',
-  signerName: 'ФИО подписывающего',
-  period: 'Период',
-  date: 'Дата',
-  number: 'Номер',
-  executor: 'Исполнитель',
-};
 
-export const FIELD_ORDER: string[] = [
-  'addressee',
-  'authorPosition',
-  'authorName',
-  'addresseeOrg',
-  'addresseePerson',
-  'addresseeAddress',
-  'signerPosition',
-  'signerName',
-  'period',
-  'date',
-  'number',
-  'executor',
-];
 
 export const TEMPLATES: Array<{
   id: TemplateId;

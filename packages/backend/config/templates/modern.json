@@ -19,5 +19,6 @@
   },
   "placeholder": { "format": "[{label}]", "highlight": "yellow" },
   "autoFill": { "date": true },
-  "dateFormat": "DD.MM.YYYY"
+  "dateFormat": "DD.MM.YYYY",
+  "requiredFields": ["Адресат", "Дата", "Номер", "Автор", "Должность", "Подпись"]
 }

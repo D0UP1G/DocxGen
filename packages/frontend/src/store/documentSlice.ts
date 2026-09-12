@@ -9,6 +9,8 @@ import type {
   DocumentTypeId,
   TemplateId,
   ProcessResponse,
+  DocTypeField,
+  CatalogResponse,
 } from '@/types/document';
 
 // ---------------------------------------------------------------------------
@@ -28,6 +30,8 @@ const initialState: DocumentState = {
   processing: false,
   generating: false,
   documentId: undefined,
+  docTypeFields: [],
+  catalog: undefined,
 };
 
 // ---------------------------------------------------------------------------
@@ -97,6 +101,30 @@ export const processText = createAsyncThunk<
       source: current.id,
       documentId: current.id,
     } as ProcessResponse & { documentId: string };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Network error';
+    return rejectWithValue(message);
+  }
+});
+
+/**
+ * Fetch catalog of document types and templates from the backend.
+ */
+export const fetchCatalog = createAsyncThunk<
+  CatalogResponse,
+  void,
+  { rejectValue: string }
+>('document/fetchCatalog', async (_, { rejectWithValue }) => {
+  try {
+    const response = await fetch('/api/catalog', { credentials: 'include' });
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({}));
+      return rejectWithValue(
+        (errorBody as { message?: string }).message ?? `Server error ${response.status}`,
+      );
+    }
+    const data = (await response.json()) as CatalogResponse;
+    return data;
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Network error';
     return rejectWithValue(message);
@@ -183,6 +211,13 @@ const documentSlice = createSlice({
     },
     setDocumentType(state, action: PayloadAction<DocumentTypeId>) {
       state.documentType = action.payload;
+      // Update docTypeFields for the new document type
+      if (state.catalog) {
+        const docType = state.catalog.docTypes.find(
+          (dt) => dt.id === action.payload,
+        );
+        state.docTypeFields = docType?.fields ?? [];
+      }
     },
     setTemplateId(state, action: PayloadAction<TemplateId>) {
       state.templateId = action.payload;
@@ -195,6 +230,9 @@ const documentSlice = createSlice({
     },
     setWarnings(state, action: PayloadAction<string[]>) {
       state.warnings = action.payload;
+    },
+    setDocTypeFields(state, action: PayloadAction<DocTypeField[]>) {
+      state.docTypeFields = action.payload;
     },
     setStatus(state, action: PayloadAction<string>) {
       state.status = action.payload;
@@ -228,10 +266,36 @@ const documentSlice = createSlice({
         state.warnings = action.payload.validation.warnings;
         state.status = 'Текст обработан';
         state.documentId = action.payload.documentId;
+        // Extract docTypeFields from catalog for the current document type
+        if (state.catalog) {
+          const docType = state.catalog.docTypes.find(
+            (dt) => dt.id === state.documentType,
+          );
+          state.docTypeFields = docType?.fields ?? [];
+        }
       })
       .addCase(processText.rejected, (state, action) => {
         state.processing = false;
         state.error = action.payload ?? 'Unknown error';
+        state.status = '';
+      });
+
+    // fetchCatalog
+    builder
+      .addCase(fetchCatalog.pending, (state) => {
+        state.status = 'Загрузка каталога…';
+      })
+      .addCase(fetchCatalog.fulfilled, (state, action) => {
+        state.catalog = action.payload;
+        // Also extract docTypeFields for the current document type
+        const docType = action.payload.docTypes.find(
+          (dt) => dt.id === state.documentType,
+        );
+        state.docTypeFields = docType?.fields ?? [];
+        state.status = '';
+      })
+      .addCase(fetchCatalog.rejected, (state, action) => {
+        state.error = action.payload ?? 'Failed to load catalog';
         state.status = '';
       });
 
@@ -265,6 +329,7 @@ export const {
   setTemplateId,
   setMissingFields,
   setWarnings,
+  setDocTypeFields,
   setStatus,
   setError,
   setProcessing,

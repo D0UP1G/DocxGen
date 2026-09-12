@@ -2,6 +2,9 @@
  * Merges sources of field values in priority order:
  * user answer > AI-verified value > auto value > template value.
  *
+ * Keys are now Russian labels (Адресат, Дата, Номер, etc.).
+ * Merges template.requiredFields ∪ docType.fields → unique set by key (Russian label).
+ *
  * @param {Object} params
  * @param {Object} params.docType - Document type config from catalog
  * @param {Object} params.template - Template config from catalog
@@ -20,9 +23,33 @@ export function mergeRequisites({ docType, template, aiFields, title, userFields
   const pending = [];
   const placeholders = [];
 
+  // Step 1: Merge template.requiredFields ∪ docType.fields → unique set by key (Russian label)
+  // docType.fields has { key, label, kind, required, question, example }
+  // template.requiredFields is an array of Russian label strings
+  const fieldsByLabel = new Map();
+
+  // Start with docType.fields (these have full metadata)
   for (const field of docType.fields) {
-    const userVal = userFields[field.key];
-    const aiVal = aiFields?.[field.key];
+    fieldsByLabel.set(field.key, field);
+  }
+
+  // Add requiredFields from template that aren't already in docType.fields
+  // These become basic field descriptors with kind: 'required'
+  for (const requiredKey of (template.requiredFields || [])) {
+    if (!fieldsByLabel.has(requiredKey)) {
+      fieldsByLabel.set(requiredKey, {
+        key: requiredKey,
+        label: requiredKey,
+        kind: 'required',
+        required: true,
+      });
+    }
+  }
+
+  // Step 2: For each field in the merged set, apply priority chain
+  for (const [fieldKey, field] of fieldsByLabel) {
+    const userVal = userFields[fieldKey];
+    const aiVal = aiFields?.[fieldKey];
 
     let value = null;
     let source = null;
@@ -42,21 +69,23 @@ export function mergeRequisites({ docType, template, aiFields, title, userFields
       value = aiVal.value;
       source = 'ai';
     }
-    // Priority 4: Auto value (date)
-    else if (field.kind === 'auto' && field.key === 'date' && template.autoFill?.date) {
+    // Priority 4: Auto value (date) — key is "Дата" now, not "date"
+    else if (field.kind === 'auto' && fieldKey === 'Дата' && template.autoFill?.['Дата']) {
       value = formatDate(today, template.dateFormat);
       source = 'auto';
     }
     // Priority 5: Template value (organization info)
     else if (field.kind === 'template') {
-      value = template.organization?.[field.key] ?? null;
+      value = template.organization?.[fieldKey] ?? null;
       source = 'template';
     }
 
     // Handle title specially — userFields.title first, then AI title
-    if (field.key === 'title' && value === null) {
-      if (userFields.title !== undefined && userFields.title !== null) {
-        value = userFields.title;
+    // Key is "Заголовок" (or whatever the Russian label for title is)
+    // For now, check if this is the title field by looking for common Russian title labels
+    if (fieldKey === 'Тема' && value === null) {
+      if (userFields['Тема'] !== undefined && userFields['Тема'] !== null) {
+        value = userFields['Тема'];
         source = 'user';
       } else if (title) {
         value = title;
@@ -64,7 +93,7 @@ export function mergeRequisites({ docType, template, aiFields, title, userFields
       }
     }
 
-    values[field.key] = {
+    values[fieldKey] = {
       value,
       label: field.label,
       source: source || 'none',
@@ -81,7 +110,7 @@ export function mergeRequisites({ docType, template, aiFields, title, userFields
     } else if (!hasValue && !isSkipped && field.required) {
       // Required field without value and not skipped → ask user
       pending.push({
-        key: field.key,
+        key: fieldKey,
         label: field.label,
         question: field.question || `Укажите: ${field.label}`,
         example: field.example || '',

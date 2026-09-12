@@ -97,7 +97,7 @@ describe('bots end-to-end (local stand)', () => {
 
     // The user's answer must reach the document, not stay a placeholder.
     const doc = runtime.db.prepare('SELECT user_fields FROM documents LIMIT 1').get();
-    expect(JSON.parse(doc.user_fields).addressee).toBe('Директору Иванову И. И.');
+    expect(JSON.parse(doc.user_fields)['Адресат']).toBe('Директору Иванову И. И.');
   });
 
   it('keeps the draft and offers a retry when the AI fails (/ai_fail)', async () => {

@@ -17,7 +17,7 @@ function buildModel({ docTypeId, templateId, values = {}, title = null, body = [
   const { template } = templates.get(templateId);
   const valObj = {};
   for (const f of docType.fields) {
-    valObj[f.key] = { value: values[f.key] ?? null, label: f.label, source: 'test' };
+    valObj[f.label] = { value: values[f.label] ?? null, label: f.label, source: 'test' };
   }
   return { docType, template, values: valObj, title, body };
 }
@@ -90,7 +90,7 @@ describe('DOCX generation — unfilled fields', () => {
     const buffer = await renderDocx(buildModel({
       docTypeId: 'memo',
       templateId: 'classic',
-      values: { addressee: 'Начальнику отдела кадров Петровой А. С.' },
+      values: { 'Адресат': 'Начальнику отдела кадров Петровой А. С.' },
     }));
     const zip = await JSZip.loadAsync(buffer);
     const docXml = await zip.file('word/document.xml').async('string');
@@ -115,7 +115,7 @@ describe('DOCX generation — matrix (4 types × 2 templates)', () => {
         const model = buildModel({
           docTypeId: dtId,
           templateId: tplId,
-          values: { addressee: 'Тестовый адресат' },
+          values: { 'Адресат': 'Тестовый адресат' },
           title: 'О проверке',
           body: ['Первый абзац текста.', 'Второй абзац текста.'],
         });
@@ -218,7 +218,7 @@ describe('DOCX generation — addressee positioning', () => {
     const buffer = await renderDocx(buildModel({
       docTypeId: 'memo',
       templateId: 'classic',
-      values: { addressee: 'Директору' },
+      values: { 'Адресат': 'Директору' },
     }));
     const zip = await JSZip.loadAsync(buffer);
     const docXml = await zip.file('word/document.xml').async('string');
@@ -231,7 +231,7 @@ describe('DOCX generation — addressee positioning', () => {
     const buffer = await renderDocx(buildModel({
       docTypeId: 'memo',
       templateId: 'modern',
-      values: { addressee: 'Директору' },
+      values: { 'Адресат': 'Директору' },
     }));
     const zip = await JSZip.loadAsync(buffer);
     const docXml = await zip.file('word/document.xml').async('string');
@@ -243,9 +243,9 @@ describe('DOCX generation — addressee positioning', () => {
       docTypeId: 'letter',
       templateId: 'classic',
       values: {
-        addresseeOrg: 'ООО «СтройМонтаж»',
-        addresseePerson: 'Директору Петрову И. С.',
-        addresseeAddress: '123456, г. Москва',
+        'Организация адресата': 'ООО «СтройМонтаж»',
+        'Лицо адресата': 'Директору Петрову И. С.',
+        'Адрес адресата': '123456, г. Москва',
       },
     }));
     const zip = await JSZip.loadAsync(buffer);
@@ -264,10 +264,10 @@ describe('DOCX generation — layout blocks', () => {
       docTypeId: 'memo',
       templateId: 'classic',
       values: {
-        addressee: 'Начальнику',
-        authorPosition: 'Инженер',
-        authorName: 'Петров П. П.',
-        date: '11.09.2026',
+        'Адресат': 'Начальнику',
+        'Должность автора': 'Инженер',
+        'ФИО автора': 'Петров П. П.',
+        'Дата': '11.09.2026',
       },
       title: 'О закупке',
     }));
@@ -296,13 +296,13 @@ describe('DOCX generation — layout blocks', () => {
       docTypeId: 'letter',
       templateId: 'classic',
       values: {
-        addresseeOrg: 'ООО «Тест»',
-        addresseePerson: 'Директору',
-        salutation: 'Уважаемый Иван Иванович!',
-        signerPosition: 'Генеральный директор',
-        signerName: 'Иванов И. И.',
-        executor: 'Сидоров П. П., тел. +7 (000) 000-00-00',
-        date: '11.09.2026',
+        'Организация адресата': 'ООО «Тест»',
+        'Лицо адресата': 'Директору',
+        'Обращение': 'Уважаемый Иван Иванович!',
+        'Должность подписывающего': 'Генеральный директор',
+        'ФИО подписывающего': 'Иванов И. И.',
+        'Исполнитель': 'Сидоров П. П., тел. +7 (000) 000-00-00',
+        'Дата': '11.09.2026',
       },
       title: 'О сотрудничестве',
     }));
@@ -321,7 +321,7 @@ describe('DOCX generation — layout blocks', () => {
     const buffer = await renderDocx(buildModel({
       docTypeId: 'memo',
       templateId: 'modern',
-      values: { addressee: 'Тест' },
+      values: { 'Адресат': 'Тест' },
     }));
     const zip = await JSZip.loadAsync(buffer);
     const docXml = await zip.file('word/document.xml').async('string');
@@ -341,7 +341,7 @@ describe('DOCX generation — modern stack layout', () => {
     const buffer = await renderDocx(buildModel({
       docTypeId: 'memo',
       templateId: 'modern',
-      values: { date: '11.09.2026' },
+      values: { 'Дата': '11.09.2026' },
     }));
     const zip = await JSZip.loadAsync(buffer);
     const docXml = await zip.file('word/document.xml').async('string');
@@ -354,8 +354,8 @@ describe('DOCX generation — modern stack layout', () => {
       docTypeId: 'memo',
       templateId: 'modern',
       values: {
-        authorPosition: 'Инженер',
-        authorName: 'Петров П. П.',
+        'Должность автора': 'Инженер',
+        'ФИО автора': 'Петров П. П.',
       },
     }));
     const zip = await JSZip.loadAsync(buffer);
